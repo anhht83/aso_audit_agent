@@ -11,7 +11,7 @@
 import { z } from 'zod'
 
 // ============================================================================
-// App Store listing - the structured output of fetchAppMetadata
+// App Store listing - the structured output of the resolveListing workflow step
 // ============================================================================
 
 /**

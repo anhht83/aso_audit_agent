@@ -21,7 +21,7 @@ mastra.db
 mastra.db-journal
 mastra.db-wal
 mastra.db-shm
-# Debug dump of the last audit (see agents/aso-audit/score.ts).
+# Debug dump of the last audit (see agents/aso-audit/scorer/).
 last-audit.json
 
 # OS

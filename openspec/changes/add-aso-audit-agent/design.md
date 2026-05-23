@@ -50,15 +50,19 @@ The constraint that drives the design more than anything else: **`npm install &&
 │   │       ├── index.ts      # boot Mastra server, register agents/workflows
 │   │       ├── agents/
 │   │       │   └── aso-audit/
-│   │       │       ├── index.ts
-│   │       │       ├── score.ts
-│   │       │       └── compute-overall-score.ts
+│   │       │       ├── agent.ts
+│   │       │       └── scorer/
+│   │       │           ├── index.ts
+│   │       │           ├── compute-overall-score.ts
+│   │       │           └── normalize-dimensions.ts
 │   │       ├── workflows/aso-audit-workflow.ts
-│   │       ├── tools/
-│   │       │   ├── fetch-app-metadata.ts
-│   │       │   └── fetch-competitors.ts
 │   │       ├── skills/aso-audit.skill.md
-│   │       ├── scrape/firecrawl.ts
+│   │       ├── scrape/
+│   │       │   ├── scraper/
+│   │       │   │   ├── index.ts        # singleton
+│   │       │   │   ├── types.ts        # Scraper interface + ScraperError
+│   │       │   │   └── firecrawl.ts    # Firecrawl Scraper impl
+│   │       │   └── types.ts            # Result<T,E> primitives
 │   │       └── model/nim.ts  # NIM client, OpenAI-compatible
 │   └── web/                  # Next.js 14 App Router
 │       └── app/
@@ -79,19 +83,19 @@ The constraint that drives the design more than anything else: **`npm install &&
 
 | Primitive | What it owns |
 |---|---|
-| **Tool: `fetchAppMetadata`** | Input: App Store URL (Zod-validated). Output: structured `AppListing`. Uses Firecrawl to scrape the listing page; parses out name, developer, category, country, icon URL, screenshot URLs, preview video URL, description, ratings, what's-new. |
-| **Tool: `fetchCompetitors`** | Input: category + country + the subject app's `appId`. Output: array of `CompetitorSummary` (up to 3, excluding subject). Sources baseline fields from Apple's free iTunes Search API; enriches with one Firecrawl scrape per competitor to fill `screenshotCount` and `hasPreviewVideo`. We deliberately return the lighter summary shape rather than full `AppListing` for each competitor - the audit's comparison table only needs the summary fields, and three full scrapes per audit would burn through Firecrawl's free tier in a few demo runs. |
+| **Scrape function: `fetchListing`** | Input: App Store URL (Zod-validated). Output: structured `AppListing`. Uses Firecrawl to scrape the listing page; parses out name, developer, category, country, icon URL, screenshot URLs, preview video URL, description, ratings, what's-new. Plain async function in `scrape/fetch-listing.ts` — no Mastra tool wrapper; called directly from the workflow's `resolveListing` step. |
+| **Scrape function: `fetchCompetitorList`** | Input: category + country + the subject app's `appId`. Output: array of `CompetitorSummary` (up to 3, excluding subject). Sources baseline fields from Apple's free iTunes Search API; enriches with one Firecrawl scrape per competitor to fill `screenshotCount` and `hasPreviewVideo`. We deliberately return the lighter summary shape rather than full `AppListing` for each competitor - the audit's comparison table only needs the summary fields, and three full scrapes per audit would burn through Firecrawl's free tier in a few demo runs. Plain async function in `scrape/fetch-competitor-list.ts` — no Mastra tool wrapper; called directly from the workflow's `runAudit` step. |
 | **Skill: `aso-audit` (primary)** | A Markdown skill file containing the full audit rubric, the ten dimensions and weights, the output format (Score Card, Quick Wins, High-Impact, Strategic, Competitor Comparison), and the explicit "what's not visible" policy. Vendored and refined from `Eronred/aso-skills` (see D11). Loaded by the agent at audit time. |
 | **Skill: `metadata-optimization` (sub-skill)** | Vendored from `aso-skills`, trimmed of Appeeky-dependent steps. Loaded by the audit agent on demand when generating before/after text for title/subtitle/description recommendations. |
 | **Skill: `screenshot-optimization` (sub-skill)** | Vendored from `aso-skills`, trimmed of Appeeky-dependent steps. Loaded by the audit agent on demand when generating screenshot recommendations. |
-| **Workflow: `asoAuditWorkflow`** | Two steps: `resolveListing` (calls `fetchAppMetadata`, returns `AppListing`, then `suspend`s for user confirmation) and `runAudit` (resumes with confirmation, calls `fetchCompetitors`, invokes the agent with the `aso-audit` skill to produce the final `AuditReport`). Emits step events the UI streams. |
+| **Workflow: `asoAuditWorkflow`** | Two steps: `resolveListing` (calls `fetchListing`, returns `AppListing`, then `suspend`s for user confirmation) and `runAudit` (resumes with confirmation, calls `fetchCompetitorList`, invokes the agent with the `aso-audit` skill to produce the final `AuditReport`). Emits step events the UI streams. |
 | **Agent: `asoAuditAgent`** | Orchestrator. Owns the chat. On first turn: extracts URL, invokes workflow. Receives suspended state, asks user to confirm. On user yes/no, resumes the workflow. On no, asks user to paste a different URL. Streams the final audit. |
 
 **Rationale:** Every primitive does work that only it can do. Tools = side-effectful I/O with typed contracts. Skills = the domain knowledge as content (the audit rubric is exactly the kind of thing skills exist for; it's reusable, editable as prose, and version-controllable separately from code). Workflows = the multi-step process with the human-in-the-loop pause. Agents = the conversational seam.
 
 **Alternative considered:** Skip the skill, bake the rubric into the agent's system prompt. Simpler. Rejected because the brief explicitly mentions skills, and a 1500-word rubric is exactly the content skills were designed for.
 
-**Alternative considered:** Make `fetchCompetitors` a workflow step rather than a tool. Either is defensible. As a tool, it's reusable from any future agent and stays inside the typed-tool contract. Kept as a tool.
+**Alternative considered:** Wrap the scrape functions as Mastra tools so an agent could call them via tool-calling. We started there and removed it: the only consumer is the workflow, which calls the plain functions directly. Adding a tool wrapper introduced a `ToolExecutionContext` synthesis problem and provided nothing the workflow couldn't get for free. Plain functions also keep the scoring agent honest — it must score from the data in its prompt instead of fetching mid-generation.
 
 ### D3. Audit output is a typed object, not free-form Markdown
 
@@ -238,8 +242,8 @@ A few risks were called out after the first implementation pass. Each was resolv
 | Writer payloads arriving as raw events | They don't. `writer.write({...})` payloads arrive wrapped in `WorkflowStreamEvent` chunks of type `'workflow-step-output'`, with the payload at `chunk.payload.output`. Chat route now `unwrapStepOutput`s each chunk and validates against `streamEventSchema` before forwarding. |
 | Firecrawl SDK API shape | `@mendable/firecrawl-js@4.24.2` exports `Firecrawl` as default (not `FirecrawlApp` — that's the v1 alias). `client.scrape(url, opts)` returns `Document` with `.json` set when `formats: [{ type: 'json', schema }]` is requested. Errors surface as `SdkError` with `.status`. Scraper rewritten accordingly. |
 | Zod 4 vs Firecrawl's bundled Zod 3 | Firecrawl's `JsonFormat.schema` accepts `Record<string, unknown>` OR `ZodTypeAny`, but the bundled validator is Zod 3 and our schemas are Zod 4. We convert at the boundary with `zod-to-json-schema` (which peer-supports `^3.25.28 \|\| ^4`) and hand Firecrawl a plain JSON Schema. The original Zod 4 schema still validates the response. |
-| Calling Mastra tool `.execute()` directly from workflow steps | Removed. The scrape and competitor lookup logic now lives in plain async functions (`scrape/fetch-listing.ts`, `scrape/fetch-competitor-list.ts`). The Mastra tools (`fetch-app-metadata`, `fetch-competitors`) are thin wrappers around those functions; workflow steps call the functions directly. No `ToolExecutionContext` synthesis, no `as any` casts. |
-| Agent structured output option key | The Mastra v1 option is `structuredOutput: { schema }`, NOT `output`. The parsed value is at `response.object`, not `response.value`. Both call sites updated in `agents/aso-audit/score.ts`. |
+| Calling Mastra tool `.execute()` directly from workflow steps | Removed entirely. The scrape and competitor lookup logic lives in plain async functions (`scrape/fetch-listing.ts`, `scrape/fetch-competitor-list.ts`) and the workflow steps call them directly. There are no Mastra tool wrappers — they were dead code in the audit's current shape, since the only consumer is the workflow. No `ToolExecutionContext` synthesis, no `as any` casts. |
+| Agent structured output option key | The Mastra v1 option is `structuredOutput: { schema }`, NOT `output`. The parsed value is at `response.object`, not `response.value`. Both call sites updated in `agents/aso-audit/scorer/index.ts`. |
 | Workspace skills path resolution | `LocalFilesystem.basePath` set to `apps/mastra/src/` (resolved from `import.meta.url`, CWD-independent); `skills: ['skills']` is the relative subdirectory. Matches the canonical example in Mastra's skills docs. |
 
 ## Migration Plan

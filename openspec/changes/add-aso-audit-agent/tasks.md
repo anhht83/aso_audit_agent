@@ -24,15 +24,15 @@
 
 ## 4. Scraper module (`apps/mastra/src/scrape`)
 
-- [x] 4.1 Add `src/scrape/firecrawl.ts` exporting a typed `Scraper` interface plus a Firecrawl implementation that takes URL + Zod extraction schema and returns parsed data or a typed error (`Result<T, ScraperError>`)
+- [x] 4.1 Add `src/scrape/scraper/` (folder) — `scraper/types.ts` exports the typed `Scraper` interface and its `ScrapeOptions`/`ScrapeSuccess`/`ScraperError` shapes; `scraper/firecrawl.ts` holds the Firecrawl implementation that takes URL + Zod extraction schema and returns parsed data or a typed error; `scraper/index.ts` exports the singleton chosen impl. The generic `Result<T, E>` primitives live one level up in `src/scrape/types.ts` because non-scraper code (URL parser, iTunes search) also depends on them.
 - [x] 4.2 Add `src/scrape/app-store-url.ts` exporting `parseAppStoreUrl(url)` that validates the URL shape and returns `{ country, appId, slug }` or a typed error, per the `app-store-ingest` URL validation requirement
 - [x] 4.3 Add unit-test-style sanity checks (in-file `if (require.main)` or a small `tsx` script) covering 2-3 valid and 2-3 invalid URLs; document how to run
 
-## 5. Tools (`apps/mastra/src/tools`)
+## 5. Scrape functions (`apps/mastra/src/scrape`)
 
-- [x] 5.1 Implement `fetchAppMetadata` tool: input Zod = `{ url: string }`, output Zod = `AppListing`. Calls `parseAppStoreUrl`, then `Scraper.extract` against the listing page with a Zod schema mirroring `AppListing`. Returns typed failure on scrape error.
-- [x] 5.2 Implement `fetchCompetitors` tool: input Zod = `{ category, country, excludeAppId }`, output Zod = `{ competitors: CompetitorSummary[], warning?: string }`. Uses Apple's iTunes Search API for the candidate list, enriches each via one Firecrawl call. Filters out the subject, returns up to three. Returns empty array with `warning` on failure rather than throwing. (Spec updated: returns `CompetitorSummary` instead of full `AppListing` to keep free-tier scraping budget reasonable.)
-- [x] 5.3 Both tools log only their high-level status (no token-streaming inside tool calls); errors propagate as typed return values
+- [x] 5.1 Implement `fetchListing(url)` in `scrape/fetch-listing.ts`: calls `parseAppStoreUrl`, then `Scraper.extract` against the listing page with a Zod schema mirroring `AppListing`. Returns typed failure on scrape error. Called directly from the workflow's `resolveListing` step; no Mastra tool wrapper.
+- [x] 5.2 Implement `fetchCompetitorList({ category, country, excludeAppId, limit })` in `scrape/fetch-competitor-list.ts`: returns `{ competitors: CompetitorSummary[], warning?: string }`. Uses Apple's iTunes Search API for the candidate list, enriches each via one Firecrawl call. Filters out the subject, returns up to `limit`. Returns empty array with `warning` on failure rather than throwing. (Spec updated: returns `CompetitorSummary` instead of full `AppListing` to keep free-tier scraping budget reasonable.) Called directly from the workflow's `runAudit` step; no Mastra tool wrapper.
+- [x] 5.3 Both functions log only their high-level status (no token-streaming); errors propagate as typed return values.
 
 ## 6. Audit skill (`apps/mastra/src/skills`)
 
@@ -44,14 +44,14 @@
 ## 7. Audit agent and scoring (`apps/mastra/src/agents`)
 
 - [x] 7.1 Implement `asoAuditAgent`: scoring agent (separate from the orchestrator that owns the chat) - bound to model from `src/model/nim.ts`. Loads the `aso-audit` skill via Workspace. Sub-skill loading wiring (task 6.4) is satisfied here via the instructions telling the agent to load `metadata-optimization` and `screenshot-optimization` on demand.
-- [x] 7.2 Implement the LLM scoring call: `src/agents/aso-audit/score.ts` - `runAudit()` takes an `AppListing` plus competitor `CompetitorSummary[]` and produces an `AuditReport` via `asoAuditAgent.generate({ output: llmAuditOutputSchema })`. The driver attaches the listing and the deterministic overall score before returning.
-- [x] 7.3 Add `src/agents/aso-audit/compute-overall-score.ts` that takes the scored dimensions and returns the renormalized `overallScore` (sum over observable dimensions only, rescaled to 100). Unit-test a few weight combinations in an inline check.
+- [x] 7.2 Implement the LLM scoring call: `src/agents/aso-audit/scorer/index.ts` - `runAudit()` takes an `AppListing` plus competitor `CompetitorSummary[]` and produces an `AuditReport` via `asoAuditAgent.generate({ output: llmAuditOutputSchema })`. The driver attaches the listing and the deterministic overall score before returning.
+- [x] 7.3 Add `src/agents/aso-audit/scorer/compute-overall-score.ts` that takes the scored dimensions and returns the renormalized `overallScore` (sum over observable dimensions only, rescaled to 100).
 - [x] 7.4 Implement the Zod-validate-with-one-retry loop for `AuditReport` per the `aso-audit` spec; surface a typed error (`AuditScoringError`) after two failures.
 
 ## 8. Workflow (`apps/mastra/src/workflows`)
 
-- [x] 8.1 Implement `asoAuditWorkflow` step `resolveListing`: input `{ url }`, calls `fetchAppMetadata`, then `suspend`s with the resolved `AppListing` as suspend data
-- [x] 8.2 Implement step `runAudit` triggered on resume: branches on `confirmed`; if false, terminates with a "user rejected listing" outcome; if true, emits a `fetchCompetitors` progress start, calls the tool, emits complete, emits a `scoring` progress start, calls the audit agent's scoring path, emits complete, computes `overallScore`, returns the final `AuditReport`
+- [x] 8.1 Implement `asoAuditWorkflow` step `resolveListing`: input `{ url }`, calls `fetchListing`, then `suspend`s with the resolved `AppListing` as suspend data
+- [x] 8.2 Implement step `runAudit` triggered on resume: branches on `confirmed`; if false, terminates with a "user rejected listing" outcome; if true, emits a `fetchCompetitors` progress start, calls `fetchCompetitorList`, emits complete, emits a `scoring` progress start, calls the audit agent's scoring path, emits complete, computes `overallScore`, returns the final `AuditReport`
 - [x] 8.3 Wire workflow step lifecycle events to a `progress` event stream via the step `writer` argument, consumed by the Mastra HTTP handler
 - [x] 8.4 The three named progress events (`resolveListing`, `fetchCompetitors`, `scoring`) fire via explicit `writer.write({ type: 'progress', step, status })` calls in order. Verification scenario coverage is satisfied by the spec scenario plus the explicit ordering in code.
 

@@ -19,13 +19,13 @@ import {
   type CompetitorSummary,
   llmAuditOutputSchema,
 } from '@aso/shared'
-import { asoAuditAgent } from './index'
+import { asoAuditAgent } from '../agent'
 import { computeOverallScore } from './compute-overall-score'
 import { normalizeDimensions } from './normalize-dimensions'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-// apps/mastra/src/agents/aso-audit -> apps/mastra
-const DEBUG_DIR = resolve(__dirname, '..', '..', '..')
+// apps/mastra/src/agents/aso-audit/scorer -> apps/mastra
+const DEBUG_DIR = resolve(__dirname, '..', '..', '..', '..')
 const AUDIT_DEBUG_ENABLED = process.env.MASTRA_AUDIT_DEBUG === '1'
 
 export class AuditScoringError extends Error {

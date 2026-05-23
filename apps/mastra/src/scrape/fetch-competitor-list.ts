@@ -7,13 +7,12 @@
  *   2. Firecrawl, one scrape per competitor, for enrichment fields the audit
  *      table needs (subtitle, screenshot count, preview-video presence, rating).
  *
- * Like fetchListing, this is the plain function form. The `fetchCompetitors`
- * Mastra tool wraps it for agent invocation; the workflow step calls it
- * directly.
+ * Called directly from the audit workflow's `runAudit` step. Like
+ * `fetchListing`, there is deliberately no Mastra tool wrapper.
  */
 import type { CompetitorSummary } from '@aso/shared'
 import { z } from 'zod'
-import { scraper } from './index'
+import { scraper } from './scraper'
 import { searchItunes, type ItunesSearchResult } from './itunes-search'
 
 export interface FetchCompetitorListArgs {

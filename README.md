@@ -38,7 +38,6 @@ Node 20.9+ is required.
 
 | Primitive | What it owns |
 |---|---|
-| **Tools** | `fetchAppMetadata` (Firecrawl + URL validation → `AppListing`), `fetchCompetitors` (iTunes Search + Firecrawl enrichment → `CompetitorSummary[]`) |
 | **Skills** | `aso-audit` (primary rubric, ten dimensions and weights, output schema, visibility policy), `metadata-optimization` and `screenshot-optimization` (loaded on demand for before/after generation of those recommendation types). All three vendored from [`Eronred/aso-skills`](https://github.com/Eronred/aso-skills) — see Decisions below. |
 | **Workflow** | `asoAuditWorkflow` — two steps with a human-in-the-loop suspend between them. `resolveListing` scrapes and suspends with the listing; `runAudit` resumes with `{ confirmed }`, runs competitor fetch + scoring, returns the final `AuditReport`. Emits `progress` events through the workflow `writer`. |
 | **Agent** | `asoAuditAgent` — the scoring agent. Receives the resolved listing + competitor summaries, loads the `aso-audit` skill, emits a structured `LlmAuditOutput` (validated by Zod with one retry on failure). |
@@ -60,11 +59,11 @@ The brief asks for recommendations that are "actually nice to look at." Mastra's
 
 ### NVIDIA NIM as the default LLM (swappable in one variable)
 
-NIM is the brief's free-tier suggestion and speaks the OpenAI protocol, so it plugs cleanly into Mastra's model router via `{ id, url, apiKey }`. To swap providers, change `LLM_BASE_URL` and `LLM_API_KEY` in `apps/mastra/.env`. For OpenAI: `LLM_BASE_URL=https://api.openai.com/v1` and a tool-calling model like `gpt-4o-mini`. For local models via LMStudio: `LLM_BASE_URL=http://localhost:1234/v1`. Anthropic doesn't speak OpenAI's protocol — for that, use Mastra's native `anthropic/<model>` string in `src/agents/aso-audit/index.ts`.
+NIM is the brief's free-tier suggestion and speaks the OpenAI protocol, so it plugs cleanly into Mastra's model router via `{ id, url, apiKey }`. To swap providers, change `LLM_BASE_URL` and `LLM_API_KEY` in `apps/mastra/.env`. For OpenAI: `LLM_BASE_URL=https://api.openai.com/v1` and a tool-calling model like `gpt-4o-mini`. For local models via LMStudio: `LLM_BASE_URL=http://localhost:1234/v1`. Anthropic doesn't speak OpenAI's protocol — for that, use Mastra's native `anthropic/<model>` string in `src/agents/aso-audit/agent.ts`.
 
 ### Firecrawl for scraping, with a typed `Scraper` interface
 
-Firecrawl is the brief's suggested option, handles JS-heavy pages, and supports Zod-typed extraction so the scraper survives small markup changes. All Firecrawl-specific code lives in `apps/mastra/src/scrape/firecrawl.ts`; the rest of the service depends only on the `Scraper` interface.
+Firecrawl is the brief's suggested option, handles JS-heavy pages, and supports Zod-typed extraction so the scraper survives small markup changes. All Firecrawl-specific code lives in `apps/mastra/src/scrape/scraper/firecrawl.ts`; the rest of the service depends only on the `Scraper` interface and imports the singleton from `apps/mastra/src/scrape/scraper/`.
 
 ### Competitors via Apple's iTunes Search API, not chart scraping
 
@@ -80,7 +79,7 @@ The overall score is **renormalized** to exclude non-observable dimensions: sum 
 
 ### Deterministic overall-score computation
 
-The LLM scores each dimension; the service computes `overallScore` from those scores using `agents/aso-audit/compute-overall-score.ts`. The LLM is not asked for `overallScore` and any field it emits is ignored. Eliminates a class of drift bugs and makes the math unit-testable.
+The LLM scores each dimension; the service computes `overallScore` from those scores using `agents/aso-audit/scorer/compute-overall-score.ts`. The LLM is not asked for `overallScore` and any field it emits is ignored. Eliminates a class of drift bugs and makes the math unit-testable.
 
 ### Audit skill source: adapted from `Eronred/aso-skills` (MIT)
 
@@ -111,22 +110,25 @@ I also deliberately **do not** integrate Appeeky itself. It's a paid product; th
 │   │       ├── mastra/index.ts          # Service entry; registers agent, workflow, route
 │   │       ├── agents/
 │   │       │   └── aso-audit/
-│   │       │       ├── index.ts         # Agent definition
-│   │       │       ├── score.ts         # Structured-output + retry driver
-│   │       │       ├── compute-overall-score.ts
-│   │       │       └── normalize-dimensions.ts
+│   │       │       ├── agent.ts             # Agent definition
+│   │       │       └── scorer/
+│   │       │           ├── index.ts         # Structured-output + retry driver
+│   │       │           ├── compute-overall-score.ts
+│   │       │           └── normalize-dimensions.ts
 │   │       ├── workflows/aso-audit-workflow.ts
-│   │       ├── tools/
-│   │       │   ├── fetch-app-metadata.ts
-│   │       │   └── fetch-competitors.ts
 │   │       ├── skills/
 │   │       │   ├── aso-audit/SKILL.md
 │   │       │   ├── metadata-optimization/SKILL.md
 │   │       │   └── screenshot-optimization/SKILL.md
 │   │       ├── scrape/
-│   │       │   ├── firecrawl.ts         # Scraper interface + impl
+│   │       │   ├── scraper/             # Scraper subsystem
+│   │       │   │   ├── index.ts         # singleton chosen impl
+│   │       │   │   ├── types.ts         # Scraper interface + ScraperError
+│   │       │   │   └── firecrawl.ts     # Firecrawl Scraper impl
+│   │       │   ├── types.ts             # Result<T,E> primitives (shared across scrape/)
+│   │       │   ├── fetch-listing.ts     # AppListing resolver
+│   │       │   ├── fetch-competitor-list.ts
 │   │       │   ├── app-store-url.ts     # URL validation
-│   │       │   ├── app-store-url.test.ts
 │   │       │   └── itunes-search.ts     # Apple iTunes Search API client
 │   │       ├── server/
 │   │       │   ├── chat-route.ts        # POST /chat (NDJSON over Web Stream)
@@ -157,12 +159,6 @@ I also deliberately **do not** integrate Appeeky itself. It's a paid product; th
 ```
 
 ## Verification
-
-A small URL-parser test script runs without external dependencies:
-
-```bash
-npm run test:url-parser --workspace apps/mastra
-```
 
 End-to-end verification needs a Firecrawl key + an LLM key and is documented in the OpenSpec `tasks.md` (sections 13.x). Run `npm run dev`, paste an App Store URL, and walk through the flow.
 

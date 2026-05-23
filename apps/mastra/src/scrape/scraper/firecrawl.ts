@@ -17,11 +17,9 @@
  */
 import Firecrawl, { SdkError } from '@mendable/firecrawl-js'
 import { z } from 'zod'
+import { err, ok, type Result } from '../types'
 import {
-  err,
-  ok,
   type PageMetadata,
-  type Result,
   type Scraper,
   type ScrapeSuccess,
   type ScraperError,

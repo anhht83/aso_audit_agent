@@ -31,7 +31,7 @@ import { appListingSchema, auditReportSchema } from '@aso/shared'
 import { z } from 'zod'
 import { fetchCompetitorList } from '../scrape/fetch-competitor-list'
 import { fetchListing } from '../scrape/fetch-listing'
-import { runAudit } from '../agents/aso-audit/score'
+import { runAudit } from '../agents/aso-audit/scorer'
 
 // ---------------------------------------------------------------------------
 // Step 1: resolveListing

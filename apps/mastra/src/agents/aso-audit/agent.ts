@@ -13,7 +13,7 @@
  * tell it to load `aso-audit` first, then load the sub-skills on demand when
  * generating metadata or screenshot recommendations.
  *
- * Validation + retry: handled by the workflow caller (see score.ts),
+ * Validation + retry: handled by the workflow caller (see scorer/),
  * not by the agent. Keeps the agent stateless and easy to reason about.
  */
 import { Agent } from '@mastra/core/agent'

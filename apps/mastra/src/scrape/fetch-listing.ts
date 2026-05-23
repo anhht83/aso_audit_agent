@@ -1,16 +1,15 @@
 /**
  * Plain async function for resolving an App Store URL to an AppListing.
  *
- * Both the `fetchAppMetadata` Mastra tool (for agent use) and the audit
- * workflow's `resolveListing` step (called directly) wrap this. Keeping the
- * core logic outside the Mastra tool wrapper avoids the awkward
- * `tool.execute(input, ctx)` invocation from workflow steps, which would
- * otherwise require synthesizing a `ToolExecutionContext` we don't have.
+ * Called directly from the audit workflow's `resolveListing` step. There is
+ * deliberately no Mastra tool wrapper: the workflow doesn't need one, and the
+ * scoring agent is given the resolved listing in its prompt rather than
+ * fetching it itself.
  */
 import { appListingSchema, type AppListing } from '@aso/shared'
 import { z } from 'zod'
 import { parseAppStoreUrl } from './app-store-url'
-import { scraper } from './index'
+import { scraper } from './scraper'
 
 export type FetchListingFailure = {
   kind:
