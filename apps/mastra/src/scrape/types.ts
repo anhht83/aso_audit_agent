@@ -49,6 +49,24 @@ export interface ScrapeOptions<TSchema extends z.ZodType> {
 }
 
 /**
+ * Page-level metadata pulled from the response that doesn't come from the
+ * structured LLM extraction. Useful when the page exposes high-quality
+ * canonical values (e.g. `<meta property="og:image">` for an app's icon)
+ * that the LLM might otherwise misread - Apple's App Store, for instance,
+ * lazy-loads icons and screenshots from a 1x1 placeholder gif, so the
+ * extracted iconUrl is unreliable while the og:image is the real artwork.
+ */
+export interface PageMetadata {
+  /** `<meta property="og:image">` value if present. */
+  ogImage?: string | null
+}
+
+export interface ScrapeSuccess<T> {
+  data: T
+  pageMetadata: PageMetadata
+}
+
+/**
  * Provider-agnostic scraper interface. Implementations: Firecrawl (default),
  * potentially `fetch + cheerio` as a fallback. Tools, agents, and workflows
  * MUST depend on this interface, never on a specific implementation.
@@ -56,7 +74,7 @@ export interface ScrapeOptions<TSchema extends z.ZodType> {
 export interface Scraper {
   extract<TSchema extends z.ZodType>(
     options: ScrapeOptions<TSchema>,
-  ): Promise<Result<z.infer<TSchema>, ScraperError>>
+  ): Promise<Result<ScrapeSuccess<z.infer<TSchema>>, ScraperError>>
 }
 
 /**

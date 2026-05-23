@@ -48,7 +48,11 @@ The constraint that drives the design more than anything else: **`npm install &&
 │   ├── mastra/               # Mastra service (HTTP + NDJSON stream)
 │   │   └── src/
 │   │       ├── index.ts      # boot Mastra server, register agents/workflows
-│   │       ├── agents/aso-audit-agent.ts
+│   │       ├── agents/
+│   │       │   └── aso-audit/
+│   │       │       ├── index.ts
+│   │       │       ├── score.ts
+│   │       │       └── compute-overall-score.ts
 │   │       ├── workflows/aso-audit-workflow.ts
 │   │       ├── tools/
 │   │       │   ├── fetch-app-metadata.ts
@@ -235,7 +239,7 @@ A few risks were called out after the first implementation pass. Each was resolv
 | Firecrawl SDK API shape | `@mendable/firecrawl-js@4.24.2` exports `Firecrawl` as default (not `FirecrawlApp` — that's the v1 alias). `client.scrape(url, opts)` returns `Document` with `.json` set when `formats: [{ type: 'json', schema }]` is requested. Errors surface as `SdkError` with `.status`. Scraper rewritten accordingly. |
 | Zod 4 vs Firecrawl's bundled Zod 3 | Firecrawl's `JsonFormat.schema` accepts `Record<string, unknown>` OR `ZodTypeAny`, but the bundled validator is Zod 3 and our schemas are Zod 4. We convert at the boundary with `zod-to-json-schema` (which peer-supports `^3.25.28 \|\| ^4`) and hand Firecrawl a plain JSON Schema. The original Zod 4 schema still validates the response. |
 | Calling Mastra tool `.execute()` directly from workflow steps | Removed. The scrape and competitor lookup logic now lives in plain async functions (`scrape/fetch-listing.ts`, `scrape/fetch-competitor-list.ts`). The Mastra tools (`fetch-app-metadata`, `fetch-competitors`) are thin wrappers around those functions; workflow steps call the functions directly. No `ToolExecutionContext` synthesis, no `as any` casts. |
-| Agent structured output option key | The Mastra v1 option is `structuredOutput: { schema }`, NOT `output`. The parsed value is at `response.object`, not `response.value`. Both call sites updated in `audit/score.ts`. |
+| Agent structured output option key | The Mastra v1 option is `structuredOutput: { schema }`, NOT `output`. The parsed value is at `response.object`, not `response.value`. Both call sites updated in `agents/aso-audit/score.ts`. |
 | Workspace skills path resolution | `LocalFilesystem.basePath` set to `apps/mastra/src/` (resolved from `import.meta.url`, CWD-independent); `skills: ['skills']` is the relative subdirectory. Matches the canonical example in Mastra's skills docs. |
 
 ## Migration Plan

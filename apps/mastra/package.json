@@ -7,11 +7,14 @@
     "dev": "mastra dev",
     "build": "mastra build",
     "typecheck": "tsc --noEmit",
-    "test:url-parser": "tsx src/scrape/app-store-url.test.ts"
+    "test:url-parser": "tsx src/scrape/app-store-url.test.ts",
+    "test:normalize-dimensions": "tsx src/agents/aso-audit/normalize-dimensions.test.ts",
+    "test:compute-overall-score": "tsx src/agents/aso-audit/compute-overall-score.ts"
   },
   "dependencies": {
     "@aso/shared": "*",
     "@mastra/core": "1.36.0",
+    "@mastra/libsql": "^1.11.1",
     "@mendable/firecrawl-js": "4.24.2",
     "mastra": "1.10.0",
     "zod": "^4.4.3"

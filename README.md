@@ -60,7 +60,7 @@ The brief asks for recommendations that are "actually nice to look at." Mastra's
 
 ### NVIDIA NIM as the default LLM (swappable in one variable)
 
-NIM is the brief's free-tier suggestion and speaks the OpenAI protocol, so it plugs cleanly into Mastra's model router via `{ id, url, apiKey }`. To swap providers, change `LLM_BASE_URL` and `LLM_API_KEY` in `apps/mastra/.env`. For OpenAI: `LLM_BASE_URL=https://api.openai.com/v1` and a tool-calling model like `gpt-4o-mini`. For local models via LMStudio: `LLM_BASE_URL=http://localhost:1234/v1`. Anthropic doesn't speak OpenAI's protocol — for that, use Mastra's native `anthropic/<model>` string in `src/agents/aso-audit-agent.ts`.
+NIM is the brief's free-tier suggestion and speaks the OpenAI protocol, so it plugs cleanly into Mastra's model router via `{ id, url, apiKey }`. To swap providers, change `LLM_BASE_URL` and `LLM_API_KEY` in `apps/mastra/.env`. For OpenAI: `LLM_BASE_URL=https://api.openai.com/v1` and a tool-calling model like `gpt-4o-mini`. For local models via LMStudio: `LLM_BASE_URL=http://localhost:1234/v1`. Anthropic doesn't speak OpenAI's protocol — for that, use Mastra's native `anthropic/<model>` string in `src/agents/aso-audit/index.ts`.
 
 ### Firecrawl for scraping, with a typed `Scraper` interface
 
@@ -80,7 +80,7 @@ The overall score is **renormalized** to exclude non-observable dimensions: sum 
 
 ### Deterministic overall-score computation
 
-The LLM scores each dimension; the service computes `overallScore` from those scores using `compute-overall-score.ts`. The LLM is not asked for `overallScore` and any field it emits is ignored. Eliminates a class of drift bugs and makes the math unit-testable.
+The LLM scores each dimension; the service computes `overallScore` from those scores using `agents/aso-audit/compute-overall-score.ts`. The LLM is not asked for `overallScore` and any field it emits is ignored. Eliminates a class of drift bugs and makes the math unit-testable.
 
 ### Audit skill source: adapted from `Eronred/aso-skills` (MIT)
 
@@ -109,14 +109,16 @@ I also deliberately **do not** integrate Appeeky itself. It's a paid product; th
 │   ├── mastra/                          # Mastra service
 │   │   └── src/
 │   │       ├── mastra/index.ts          # Service entry; registers agent, workflow, route
-│   │       ├── agents/aso-audit-agent.ts
+│   │       ├── agents/
+│   │       │   └── aso-audit/
+│   │       │       ├── index.ts         # Agent definition
+│   │       │       ├── score.ts         # Structured-output + retry driver
+│   │       │       ├── compute-overall-score.ts
+│   │       │       └── normalize-dimensions.ts
 │   │       ├── workflows/aso-audit-workflow.ts
 │   │       ├── tools/
 │   │       │   ├── fetch-app-metadata.ts
 │   │       │   └── fetch-competitors.ts
-│   │       ├── audit/
-│   │       │   ├── compute-overall-score.ts
-│   │       │   └── score.ts             # Structured-output + retry driver
 │   │       ├── skills/
 │   │       │   ├── aso-audit/SKILL.md
 │   │       │   ├── metadata-optimization/SKILL.md

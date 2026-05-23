@@ -1,4 +1,5 @@
 ---
+
 name: aso-audit
 description: Run a comprehensive ASO health audit on an Apple App Store listing. Score ten dimensions on a 0-10 scale, compute a weighted overall score out of 100, and produce a prioritized action plan with concrete before/after recommendations. Use this skill whenever the user pastes an App Store URL and wants an audit, ASO review, or listing-quality assessment.
 metadata:
@@ -8,8 +9,8 @@ metadata:
     path: skills/aso-audit/SKILL.md
     ref: main
     license: MIT
-  derivedFrom: "Adapted from Eronred/aso-skills (MIT). Rubric reconciled with the take-home brief: Description weight unified to 10%, 'Keyword Rankings' replaced by 'Competitive position' (5%), iOS-only audit. Added the Visibility and Renormalization policy section for honest handling of data not visible from the public listing."
----
+
+##   derivedFrom: "Adapted from Eronred/aso-skills (MIT). Rubric reconciled with the take-home brief: Description weight unified to 10%, 'Keyword Rankings' replaced by 'Competitive position' (5%), iOS-only audit. Added the Visibility and Renormalization policy section for honest handling of data not visible from the public listing."
 
 # ASO Audit
 
@@ -20,6 +21,7 @@ This audit is **iOS-only** and based **strictly on data visible on the public Ap
 ## Inputs you will receive
 
 The calling workflow gives you:
+
 - A resolved `AppListing` for the subject app (name, developer, category, country, icon, screenshots, preview video, description, subtitle, what's-new, ratings, promotional text).
 - A `CompetitorSummary[]` containing up to three same-category competitors (or empty with a warning).
 
@@ -29,18 +31,20 @@ You do not need to fetch anything. Score what's in front of you.
 
 Score each dimension on a **0-10 scale**. The weighted sum across **observable** dimensions, renormalized to 100, is the overall ASO score.
 
-| Dimension | Weight | Visibility | Key checks |
-|---|---|---|---|
-| **Title** (30 char limit) | 20% | observable | Primary keyword present? Character utilization (close to 30)? Brand vs. keyword balance? Reads naturally, not stuffed? Distinct from competitors? |
-| **Subtitle** (30 char limit) | 15% | observable | Distinct secondary keywords (not repeating title)? Benefit-driven? Full character utilization? |
-| **Keyword field** (100 char limit, iOS) | 15% | **not-visible-from-public-listing** | Not visible. Do not score. See Visibility policy below. |
-| **Description** | 10% | observable | First 3 lines hook above the "more" cutoff? Features benefit-framed? Social proof? Clear CTA? Natural keyword integration? |
-| **Screenshots** | 15% | observable | All 10 slots used? First 2-3 communicate value? Readable on-image text (Apple OCR-indexes it)? Cohesive design language? |
-| **App preview video** | 5% | observable | Exists? Hook in first 3 seconds? 15-30 seconds? Implied to work without sound (captions/text)? |
-| **Ratings & reviews** | 15% | observable | Average rating? Sufficient rating count for the category? Healthy distribution? (Recent-trend and developer-response checks require data not on the public listing - infer where possible from review text or rating count growth, mark as partial.) |
-| **Icon** | 5% | observable | Distinctive in search results? Clear at small sizes? Category-appropriate? Avoids unreadable text? |
-| **Conversion signals** | 5% | observable (partial) | Promotional text used (and informative)? "What's New" recent and informative? In-App Events on the listing right now? Custom Product Pages not visible to the public; flag as such. |
-| **Competitive position** | 5% | observable | Title and subtitle keyword overlap vs. competitors? Visual style differentiation? Rating gap (subject's averageRating and ratingCount vs. competitors')? Note: if no competitor data was returned, set `visibility: "observable"` but score conservatively and call out the missing comparison in `reasoning`. |
+
+| Dimension                               | Weight | Visibility                          | Key checks                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------- | ------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Title** (30 char limit)               | 20%    | observable                          | Primary keyword present? Character utilization (close to 30)? Brand vs. keyword balance? Reads naturally, not stuffed? Distinct from competitors?                                                                                                                                                              |
+| **Subtitle** (30 char limit)            | 15%    | observable                          | Distinct secondary keywords (not repeating title)? Benefit-driven? Full character utilization?                                                                                                                                                                                                                 |
+| **Keyword field** (100 char limit, iOS) | 15%    | **not-visible-from-public-listing** | Not visible. Do not score. See Visibility policy below.                                                                                                                                                                                                                                                        |
+| **Description**                         | 10%    | observable                          | First 3 lines hook above the "more" cutoff? Features benefit-framed? Social proof? Clear CTA? Natural keyword integration?                                                                                                                                                                                     |
+| **Screenshots**                         | 15%    | observable                          | All 10 slots used? First 2-3 communicate value? Readable on-image text (Apple OCR-indexes it)? Cohesive design language?                                                                                                                                                                                       |
+| **App preview video**                   | 5%     | observable                          | Exists? Hook in first 3 seconds? 15-30 seconds? Implied to work without sound (captions/text)?                                                                                                                                                                                                                 |
+| **Ratings & reviews**                   | 15%    | observable                          | Average rating? Sufficient rating count for the category? Healthy distribution? (Recent-trend and developer-response checks require data not on the public listing - infer where possible from review text or rating count growth, mark as partial.)                                                           |
+| **Icon**                                | 5%     | observable                          | Distinctive in search results? Clear at small sizes? Category-appropriate? Avoids unreadable text?                                                                                                                                                                                                             |
+| **Conversion signals**                  | 5%     | observable (partial)                | Promotional text used (and informative)? "What's New" recent and informative? In-App Events on the listing right now? Custom Product Pages not visible to the public; flag as such.                                                                                                                            |
+| **Competitive position**                | 5%     | observable                          | Title and subtitle keyword overlap vs. competitors? Visual style differentiation? Rating gap (subject's averageRating and ratingCount vs. competitors')? Note: if no competitor data was returned, set `visibility: "observable"` but score conservatively and call out the missing comparison in `reasoning`. |
+
 
 ### Per-dimension scoring guidance
 
@@ -65,10 +69,12 @@ Score each dimension on a **0-10 scale**. The weighted sum across **observable**
 ## Visibility and Renormalization Policy
 
 Some dimensions in the standard ASO rubric require data we **cannot see from the public App Store listing**:
+
 - **Keyword field** (100-char iOS, hidden) - always `visibility: "not-visible-from-public-listing"`, `score: null`. Do not invent a score.
 - **Promotional text history**, **A/B test data**, **In-App Events history**, **Custom Product Pages** - we can only see what is currently on the listing. Score the current state under "Conversion signals" and note in `reasoning` what would require App Store Connect.
 
 For every dimension, you MUST emit a `visibility` field. The service computes the overall score by:
+
 1. Summing `(score / 10) * weight` across observable dimensions.
 2. Dividing by the sum of observable weights.
 3. Multiplying by 100.
@@ -78,11 +84,13 @@ You do NOT need to compute the overall score yourself. The service computes it d
 ## Recommendations
 
 Produce three ordered lists, each with 3-5 items:
+
 - **Quick Wins** — implementable today, high impact (e.g., rewriting the subtitle, replacing the first screenshot caption).
 - **High-Impact Changes** — more effort, significant impact (e.g., commissioning a new screenshot set, rewriting the description, recording an app preview).
 - **Strategic** — longer-term (e.g., shifting category positioning, building a review acquisition program, launching In-App Events).
 
 Each recommendation MUST include:
+
 - `title` — short, action-oriented (e.g., "Rewrite the title to lead with 'meditation'").
 - `evidence` — the specific data point from the listing that motivates this (quote the actual title text, the screenshot count, the rating, etc.).
 - `rationale` — 1-3 sentences explaining the ASO principle being applied.
@@ -95,6 +103,7 @@ When emitting a metadata recommendation (title, subtitle, description, promotion
 ## Competitor comparison
 
 You will receive a `CompetitorSummary[]` (up to three apps). Emit a `competitorComparison` object with:
+
 - `subject`: a summary of the subject app, sourced from its `AppListing`.
 - `competitors`: the array you received.
 - `summary`: one to three sentences on relative position - rating gap, screenshot-count gap, title/subtitle keyword overlap, presence of preview video.
@@ -126,4 +135,4 @@ Return a JSON object matching this shape (the service validates with Zod):
 
 ## Attribution
 
-This skill is adapted from [`Eronred/aso-skills`](https://github.com/Eronred/aso-skills) (MIT licensed). See the frontmatter `metadata.source` block for the upstream reference.
+This skill is adapted from `[Eronred/aso-skills](https://github.com/Eronred/aso-skills)` (MIT licensed). See the frontmatter `metadata.source` block for the upstream reference.

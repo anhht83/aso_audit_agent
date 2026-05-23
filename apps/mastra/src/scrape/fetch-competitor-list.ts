@@ -63,14 +63,14 @@ async function enrichCompetitor(candidate: ItunesSearchResult): Promise<Competit
     return fallback
   }
 
+  const { data } = scrape.value
   return {
     ...fallback,
-    subtitle: scrape.value.subtitle,
-    averageRating: scrape.value.averageRating,
-    ratingCount:
-      scrape.value.ratingCount === null ? null : Math.max(0, Math.trunc(scrape.value.ratingCount)),
-    screenshotCount: Math.max(0, Math.trunc(scrape.value.screenshotCount)),
-    hasPreviewVideo: scrape.value.hasPreviewVideo,
+    subtitle: data.subtitle,
+    averageRating: data.averageRating,
+    ratingCount: data.ratingCount === null ? null : Math.max(0, Math.trunc(data.ratingCount)),
+    screenshotCount: Math.max(0, Math.trunc(data.screenshotCount)),
+    hasPreviewVideo: data.hasPreviewVideo,
   }
 }
 

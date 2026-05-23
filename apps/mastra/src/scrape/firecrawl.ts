@@ -20,12 +20,14 @@ import { z } from 'zod'
 import {
   err,
   ok,
+  type PageMetadata,
   type Result,
   type Scraper,
+  type ScrapeSuccess,
   type ScraperError,
   type ScrapeOptions,
   zodErrorToScraperError,
-} from './types.ts'
+} from './types'
 
 export class FirecrawlScraper implements Scraper {
   private readonly client: Firecrawl
@@ -39,7 +41,7 @@ export class FirecrawlScraper implements Scraper {
 
   async extract<TSchema extends z.ZodType>(
     options: ScrapeOptions<TSchema>,
-  ): Promise<Result<z.infer<TSchema>, ScraperError>> {
+  ): Promise<Result<ScrapeSuccess<z.infer<TSchema>>, ScraperError>> {
     const { url, schema, prompt } = options
 
     // Convert Zod 4 -> JSON Schema using Zod's native exporter.
@@ -116,6 +118,14 @@ export class FirecrawlScraper implements Scraper {
     if (!parsed.success) {
       return err(zodErrorToScraperError(parsed.error))
     }
-    return ok(parsed.data)
+    // Firecrawl returns its own ogImage field on the document metadata,
+    // pulled from `<meta property="og:image">` in the page head. For App
+    // Store listings this is the canonical 1024x1024 icon; the markup the
+    // LLM sees usually contains only the lazy-load placeholder gif.
+    const ogImageRaw = (doc?.metadata as { ogImage?: unknown } | undefined)?.ogImage
+    const pageMetadata: PageMetadata = {
+      ogImage: typeof ogImageRaw === 'string' && ogImageRaw.length > 0 ? ogImageRaw : null,
+    }
+    return ok({ data: parsed.data, pageMetadata })
   }
 }

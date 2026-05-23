@@ -16,6 +16,13 @@ out/
 
 # Mastra runtime
 .mastra/
+# Mastra LibSQL storage (workflow snapshots, agent memory, etc.)
+mastra.db
+mastra.db-journal
+mastra.db-wal
+mastra.db-shm
+# Debug dump of the last audit (see agents/aso-audit/score.ts).
+last-audit.json
 
 # OS
 .DS_Store

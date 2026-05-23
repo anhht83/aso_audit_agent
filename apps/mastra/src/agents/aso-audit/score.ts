@@ -10,19 +10,28 @@
  * Throws on hard failure after one retry. The workflow turns that into a
  * typed error message for the user.
  */
+import { writeFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
 import {
   type AppListing,
   type AuditReport,
   type CompetitorSummary,
   llmAuditOutputSchema,
 } from '@aso/shared'
-import { asoAuditAgent } from '../agents/aso-audit-agent'
+import { asoAuditAgent } from './index'
 import { computeOverallScore } from './compute-overall-score'
+import { normalizeDimensions } from './normalize-dimensions'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+// apps/mastra/src/agents/aso-audit -> apps/mastra
+const DEBUG_DIR = resolve(__dirname, '..', '..', '..')
+const AUDIT_DEBUG_ENABLED = process.env.MASTRA_AUDIT_DEBUG === '1'
 
 export class AuditScoringError extends Error {
   constructor(
     message: string,
-    public readonly cause?: unknown,
+    public override readonly cause?: unknown,
   ) {
     super(message)
     this.name = 'AuditScoringError'
@@ -108,12 +117,49 @@ export async function runAudit(args: ScoreArgs): Promise<AuditReport> {
     )
   }
 
-  const overallScore = computeOverallScore(parsed.dimensions)
+  // Normalize structural fields (weight, visibility, dimension membership)
+  // before scoring. The model is trusted for judgment, not for shape; see
+  // normalize-dimensions.ts for the contract.
+  const normalized = normalizeDimensions(parsed.dimensions)
+  const overallScore = computeOverallScore(normalized.dimensions)
+
+  // Opt-in debug: dump the raw LLM dimensions, the normalization deltas,
+  // and the computed score. Enabled by MASTRA_AUDIT_DEBUG=1. The file is
+  // gitignored.
+  if (AUDIT_DEBUG_ENABLED) {
+    try {
+      await writeFile(
+        resolve(DEBUG_DIR, 'last-audit.json'),
+        JSON.stringify(
+          {
+            listing: args.listing,
+            overallScore,
+            normalizeDeltas: {
+              missing: normalized.missing,
+              weightCorrections: normalized.weightCorrections,
+              visibilityCorrections: normalized.visibilityCorrections,
+            },
+            llmDimensions: parsed.dimensions,
+            dimensions: normalized.dimensions,
+            quickWins: parsed.quickWins,
+            highImpact: parsed.highImpact,
+            strategic: parsed.strategic,
+            competitorComparison: parsed.competitorComparison,
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      )
+    } catch {
+      // Best-effort debug; never fail the audit on disk-write errors.
+    }
+  }
 
   return {
     app: args.listing,
     overallScore,
-    dimensions: parsed.dimensions,
+    dimensions: normalized.dimensions,
     quickWins: parsed.quickWins,
     highImpact: parsed.highImpact,
     strategic: parsed.strategic,

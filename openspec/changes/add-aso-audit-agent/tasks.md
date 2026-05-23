@@ -44,8 +44,8 @@
 ## 7. Audit agent and scoring (`apps/mastra/src/agents`)
 
 - [x] 7.1 Implement `asoAuditAgent`: scoring agent (separate from the orchestrator that owns the chat) - bound to model from `src/model/nim.ts`. Loads the `aso-audit` skill via Workspace. Sub-skill loading wiring (task 6.4) is satisfied here via the instructions telling the agent to load `metadata-optimization` and `screenshot-optimization` on demand.
-- [x] 7.2 Implement the LLM scoring call: `src/audit/score.ts` - `runAudit()` takes an `AppListing` plus competitor `CompetitorSummary[]` and produces an `AuditReport` via `asoAuditAgent.generate({ output: llmAuditOutputSchema })`. The driver attaches the listing and the deterministic overall score before returning.
-- [x] 7.3 Add `src/audit/compute-overall-score.ts` that takes the scored dimensions and returns the renormalized `overallScore` (sum over observable dimensions only, rescaled to 100). Unit-test a few weight combinations in an inline check.
+- [x] 7.2 Implement the LLM scoring call: `src/agents/aso-audit/score.ts` - `runAudit()` takes an `AppListing` plus competitor `CompetitorSummary[]` and produces an `AuditReport` via `asoAuditAgent.generate({ output: llmAuditOutputSchema })`. The driver attaches the listing and the deterministic overall score before returning.
+- [x] 7.3 Add `src/agents/aso-audit/compute-overall-score.ts` that takes the scored dimensions and returns the renormalized `overallScore` (sum over observable dimensions only, rescaled to 100). Unit-test a few weight combinations in an inline check.
 - [x] 7.4 Implement the Zod-validate-with-one-retry loop for `AuditReport` per the `aso-audit` spec; surface a typed error (`AuditScoringError`) after two failures.
 
 ## 8. Workflow (`apps/mastra/src/workflows`)

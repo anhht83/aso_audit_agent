@@ -51,6 +51,32 @@ export const DIMENSION_WEIGHTS: Record<DimensionName, number> = {
   'Competitive position': 5,
 }
 
+export const inAppEventSchema = z.object({
+  /** Event title as shown on the listing. */
+  title: z.string().min(1),
+  /** Status label such as "HAPPENING NOW" or "UPCOMING", null if no status is rendered. */
+  status: z.string().nullable(),
+  /** Optional one-line subtitle/description rendered under the event title. */
+  subtitle: z.string().nullable(),
+})
+export type InAppEvent = z.infer<typeof inAppEventSchema>
+
+export const sampleReviewSchema = z.object({
+  /** Review headline shown on the listing. */
+  title: z.string().min(1),
+  /** Review body text shown on the listing. */
+  body: z.string().min(1),
+})
+export type SampleReview = z.infer<typeof sampleReviewSchema>
+
+export const versionHistoryEntrySchema = z.object({
+  /** Version number, e.g. "9.1.48". */
+  version: z.string().min(1),
+  /** Release date as shown on the listing, e.g. "May 15" or "12/17/2025". */
+  date: z.string().min(1),
+})
+export type VersionHistoryEntry = z.infer<typeof versionHistoryEntrySchema>
+
 export const appListingSchema = z.object({
   appId: z.string().min(1),
   country: z.string().length(2),
@@ -60,8 +86,18 @@ export const appListingSchema = z.object({
   /** Primary category as shown on the listing page. */
   category: z.string().min(1),
   iconUrl: z.string().url(),
-  /** Screenshot image URLs in display order. May be empty if scrape fails partially. */
+  /**
+   * Screenshot image URLs in display order, with Apple's lazy-load
+   * placeholder GIF removed. Almost always empty on a fresh markdown
+   * scrape; rely on `screenshotCount` for the Screenshots audit dimension.
+   */
   screenshotUrls: z.array(z.string().url()),
+  /**
+   * Total number of screenshot slots on the listing (including the
+   * lazy-loaded placeholders the LLM cannot resolve). 0-10 typical.
+   * Null if the screenshot region itself could not be located.
+   */
+  screenshotCount: z.number().int().min(0).nullable(),
   /** App preview video URL if present on the listing, else null. */
   previewVideoUrl: z.string().url().nullable(),
   /** Full long description from the listing. */
@@ -76,8 +112,17 @@ export const appListingSchema = z.object({
   averageRating: z.number().min(0).max(5).nullable(),
   /** Total rating count if the listing shows one. */
   ratingCount: z.number().int().min(0).nullable(),
-  /** Promotional text when surfaced on the listing. Null if not visible. */
+  /**
+   * The optional 170-char promotional banner above the description (NOT the
+   * price label). Null if no such banner is rendered.
+   */
   promotionalText: z.string().nullable(),
+  /** In-App Events currently surfaced on the listing. Empty array if none. */
+  inAppEvents: z.array(inAppEventSchema),
+  /** Up to 5 representative reviews visible on the listing. */
+  sampleReviews: z.array(sampleReviewSchema),
+  /** Up to 5 most-recent entries from the Version History list (newest first). */
+  versionHistory: z.array(versionHistoryEntrySchema),
 })
 
 export type AppListing = z.infer<typeof appListingSchema>

@@ -23,7 +23,8 @@ import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { Mastra } from '@mastra/core'
 import { LocalFilesystem, Workspace } from '@mastra/core/workspace'
-import { asoAuditAgent } from '../agents/aso-audit-agent'
+import { LibSQLStore } from '@mastra/libsql'
+import { asoAuditAgent } from '../agents/aso-audit'
 import { asoAuditWorkflow } from '../workflows/aso-audit-workflow'
 import { chatRoute } from '../server/chat-route'
 import { env } from '../env'
@@ -32,6 +33,8 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 // apps/mastra/src is the parent of apps/mastra/src/mastra/.
 const SRC_DIR = resolve(__dirname, '..')
+// apps/mastra/src/mastra/index.ts -> apps/mastra/ is two `..` up from this file.
+const PACKAGE_DIR = resolve(__dirname, '..', '..')
 
 /**
  * Workspace exposing the three vendored skills:
@@ -50,8 +53,23 @@ const workspace = new Workspace({
   skills: ['skills'],
 })
 
+/**
+ * SQLite-backed storage so suspended workflow snapshots survive `mastra dev`
+ * hot-restarts. Without this, every source-file edit between paste-URL and
+ * click-confirm wipes the run and resume fails with:
+ *   "No snapshot found for this workflow run: aso-audit-workflow <runId>".
+ *
+ * The DB file lives under apps/mastra/ so it's scoped to this service. It's
+ * gitignored; nothing else in the codebase reads it directly.
+ */
+const storage = new LibSQLStore({
+  id: 'aso-audit',
+  url: `file:${resolve(PACKAGE_DIR, 'mastra.db')}`,
+})
+
 export const mastra = new Mastra({
   workspace,
+  storage,
   agents: { asoAuditAgent },
   workflows: { asoAuditWorkflow },
   server: {
