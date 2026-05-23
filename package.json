@@ -1,0 +1,31 @@
+{
+  "name": "aso-audit-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chat-driven ASO audit for Apple App Store listings, built on Mastra.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "prepare": "npm run build --workspace @aso/shared",
+    "dev:shared": "npm run dev --workspace @aso/shared",
+    "dev:apps": "concurrently -k -n mastra,web -c blue,magenta \"npm run dev --workspace apps/mastra\" \"npm run dev --workspace apps/web\"",
+    "dev": "npm run build --workspace @aso/shared && concurrently -k -n shared,mastra,web -c gray,blue,magenta \"npm run dev --workspace @aso/shared\" \"npm run dev --workspace apps/mastra\" \"npm run dev --workspace apps/web\"",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0"
+  },
+  "overrides": {
+    "zod": "^4.4.3"
+  },
+  "engines": {
+    "node": ">=22.22.0"
+  }
+}

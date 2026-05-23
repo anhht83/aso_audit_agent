@@ -1,0 +1,6 @@
+node_modules
+dist
+.next
+.mastra
+*.lock
+package-lock.json

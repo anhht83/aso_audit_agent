@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background: theme('colors.bg');
+  color: theme('colors.text');
+  min-height: 100%;
+}
+
+body {
+  font-family: theme('fontFamily.sans');
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+/* Subtle scrollbar in the chat panel. */
+.chat-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: theme('colors.border');
+  border-radius: 4px;
+}
