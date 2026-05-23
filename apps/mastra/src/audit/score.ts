@@ -16,8 +16,8 @@ import {
   type CompetitorSummary,
   llmAuditOutputSchema,
 } from '@aso/shared'
-import { asoAuditAgent } from '../agents/aso-audit-agent.ts'
-import { computeOverallScore } from './compute-overall-score.ts'
+import { asoAuditAgent } from '../agents/aso-audit-agent'
+import { computeOverallScore } from './compute-overall-score'
 
 export class AuditScoringError extends Error {
   constructor(

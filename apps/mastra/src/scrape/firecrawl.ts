@@ -8,13 +8,15 @@
  *     is requested.
  *   - On HTTP errors the SDK throws `SdkError` with `.status` and `.code`.
  *
- * Zod compatibility: Firecrawl's bundled zod is v3, ours is v4. We convert
- * our Zod 4 extraction schema to JSON Schema with `zod-to-json-schema` before
- * handing it to Firecrawl. Firecrawl accepts either, per the JsonFormat type.
+ * Zod compatibility: we use Zod 4's native `z.toJSONSchema()` to convert our
+ * extraction schema before handing it to Firecrawl. We previously used the
+ * third-party `zod-to-json-schema` package, but it only understands Zod 3
+ * instances and silently produces an empty `{}` schema when given a Zod 4
+ * instance - which makes Firecrawl extract nothing and return an empty
+ * Document with no `json` field.
  */
 import Firecrawl, { SdkError } from '@mendable/firecrawl-js'
-import type { z } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
+import { z } from 'zod'
 import {
   err,
   ok,
@@ -40,10 +42,14 @@ export class FirecrawlScraper implements Scraper {
   ): Promise<Result<z.infer<TSchema>, ScraperError>> {
     const { url, schema, prompt } = options
 
-    // Convert Zod 4 -> JSON Schema. We strip the meta keys Firecrawl rejects.
-    const jsonSchema = zodToJsonSchema(schema, {
-      // Inline definitions so we don't ship a $ref-heavy doc.
-      $refStrategy: 'none',
+    // Convert Zod 4 -> JSON Schema using Zod's native exporter.
+    // `unrepresentable: 'any'` keeps the conversion tolerant for any inner
+    // type (e.g. dates) that has no canonical JSON Schema form; our
+    // extraction schema today is pure JSON-friendly, but this keeps the call
+    // future-proof and consistent with the rest of the service.
+    const jsonSchema = z.toJSONSchema(schema, {
+      target: 'draft-7',
+      unrepresentable: 'any',
     }) as Record<string, unknown>
 
     let doc
@@ -92,9 +98,17 @@ export class FirecrawlScraper implements Scraper {
 
     const raw = doc?.json
     if (raw == null) {
+      // Surface whatever clue Firecrawl gave us. `doc.warning` is the
+      // SDK-level diagnostic field; `doc.metadata.error` is the
+      // page-level error (e.g. extractor failure). If both are empty,
+      // the most common cause is an empty JSON schema being sent - hence
+      // the diagnostic suffix.
+      const warning = doc?.warning ?? doc?.metadata?.error
       return err({
         kind: 'parse_failed',
-        message: 'Firecrawl returned no extracted JSON for the App Store listing.',
+        message: warning
+          ? `Firecrawl returned no extracted JSON: ${warning}`
+          : 'Firecrawl returned no extracted JSON for the App Store listing. The page may be behind a bot challenge, or the extraction schema may be empty.',
       })
     }
 

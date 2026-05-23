@@ -32,7 +32,7 @@ import {
   streamEventSchema,
   type StreamEvent,
 } from '@aso/shared'
-import { createEventStream, STREAM_HEADERS } from './event-stream.ts'
+import { createEventStream, STREAM_HEADERS } from './event-stream'
 
 /**
  * Extract an Apple App Store URL from arbitrary user text.
@@ -175,12 +175,17 @@ async function emitFinalForResult(
   }
 
   if (r.status === 'suspended') {
-    // suspendPayload is the argument we passed to suspend() inside the step:
-    // `{ listing: AppListing }`. Validate at the boundary - the step's
-    // suspendSchema should have already validated, but trust nothing crossing
-    // the workflow engine boundary.
-    const sp = r.suspendPayload as { listing?: unknown } | undefined
-    const listingParse = appListingSchema.safeParse(sp?.listing)
+    // @mastra/core@1.36.0 keys suspendPayload by stepId, i.e.
+    //   { resolveListing: { listing: AppListing } }
+    // not flat `{ listing: AppListing }` (which was the older shape). We
+    // pick the listing from the known resolveListing step and validate at
+    // the boundary - the step's suspendSchema should have already
+    // validated, but trust nothing crossing the workflow engine boundary.
+    const sp = r.suspendPayload as
+      | Record<string, { listing?: unknown } | undefined>
+      | undefined
+    const listingCandidate = sp?.resolveListing?.listing ?? (sp as { listing?: unknown })?.listing
+    const listingParse = appListingSchema.safeParse(listingCandidate)
     if (!listingParse.success) {
       await writer.write({
         type: 'message',

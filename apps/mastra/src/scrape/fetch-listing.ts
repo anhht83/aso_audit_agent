@@ -9,8 +9,8 @@
  */
 import { appListingSchema, type AppListing } from '@aso/shared'
 import { z } from 'zod'
-import { parseAppStoreUrl } from './app-store-url.ts'
-import { scraper } from './index.ts'
+import { parseAppStoreUrl } from './app-store-url'
+import { scraper } from './index'
 
 export type FetchListingFailure = {
   kind:

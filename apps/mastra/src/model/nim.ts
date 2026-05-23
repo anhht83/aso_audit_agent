@@ -16,7 +16,7 @@
  * built-in provider routing (set ANTHROPIC_API_KEY and `model: 'anthropic/...'`
  * directly on the Agent rather than this factory).
  */
-import { env } from '../env.ts'
+import { env } from '../env'
 
 /**
  * Returns a Mastra model descriptor pointing at the configured OpenAI-compatible

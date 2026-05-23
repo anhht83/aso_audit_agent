@@ -13,8 +13,8 @@
  */
 import type { CompetitorSummary } from '@aso/shared'
 import { z } from 'zod'
-import { scraper } from './index.ts'
-import { searchItunes, type ItunesSearchResult } from './itunes-search.ts'
+import { scraper } from './index'
+import { searchItunes, type ItunesSearchResult } from './itunes-search'
 
 export interface FetchCompetitorListArgs {
   category: string

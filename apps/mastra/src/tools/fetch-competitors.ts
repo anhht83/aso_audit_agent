@@ -8,7 +8,7 @@
 import { createTool } from '@mastra/core/tools'
 import { competitorSummarySchema } from '@aso/shared'
 import { z } from 'zod'
-import { fetchCompetitorList } from '../scrape/fetch-competitor-list.ts'
+import { fetchCompetitorList } from '../scrape/fetch-competitor-list'
 
 const inputSchema = z.object({
   category: z.string().describe('Primary App Store category of the subject app, e.g. "Music".'),

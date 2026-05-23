@@ -8,7 +8,7 @@
  * CI without ceremony.
  */
 import { strict as assert } from 'node:assert'
-import { parseAppStoreUrl } from './app-store-url.ts'
+import { parseAppStoreUrl } from './app-store-url'
 
 interface ValidCase {
   name: string

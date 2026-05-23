@@ -4,9 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "node scripts/patch-zod-tojsonschema.mjs",
-    "predev": "node scripts/patch-zod-tojsonschema.mjs",
-    "prebuild": "node scripts/patch-zod-tojsonschema.mjs",
     "dev": "mastra dev",
     "build": "mastra build",
     "typecheck": "tsc --noEmit",
@@ -17,8 +14,7 @@
     "@mastra/core": "1.36.0",
     "@mendable/firecrawl-js": "4.24.2",
     "mastra": "1.10.0",
-    "zod": "^4.4.3",
-    "zod-to-json-schema": "^3.25.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

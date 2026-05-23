@@ -11,7 +11,7 @@
 import { createTool } from '@mastra/core/tools'
 import { appListingSchema } from '@aso/shared'
 import { z } from 'zod'
-import { fetchListing } from '../scrape/fetch-listing.ts'
+import { fetchListing } from '../scrape/fetch-listing'
 
 const inputSchema = z.object({
   url: z.string().describe('Full Apple App Store listing URL pasted by the user.'),

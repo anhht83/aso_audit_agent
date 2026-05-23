@@ -13,7 +13,7 @@
  * Endpoint reference:
  *   https://itunes.apple.com/search?term=<term>&country=<cc>&media=software&entity=software&limit=<n>
  */
-import { err, ok, type Result } from './types.ts'
+import { err, ok, type Result } from './types'
 
 export interface ItunesSearchResult {
   appId: string

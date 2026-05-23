@@ -8,7 +8,7 @@
  * regex on the path. No String.split() ladder, no surprise edge cases like
  * trailing slashes or query strings.
  */
-import { err, ok, type Result } from './types.ts'
+import { err, ok, type Result } from './types'
 
 export type AppStoreUrlError =
   | { kind: 'invalid_url'; message: string }

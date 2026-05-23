@@ -17,7 +17,7 @@
  * not by the agent. Keeps the agent stateless and easy to reason about.
  */
 import { Agent } from '@mastra/core/agent'
-import { model } from '../model/nim.ts'
+import { model } from '../model/nim'
 
 export const asoAuditAgent = new Agent({
   id: 'aso-audit-agent',

@@ -29,9 +29,9 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows'
 import { appListingSchema, auditReportSchema } from '@aso/shared'
 import { z } from 'zod'
-import { fetchCompetitorList } from '../scrape/fetch-competitor-list.ts'
-import { fetchListing } from '../scrape/fetch-listing.ts'
-import { runAudit } from '../audit/score.ts'
+import { fetchCompetitorList } from '../scrape/fetch-competitor-list'
+import { fetchListing } from '../scrape/fetch-listing'
+import { runAudit } from '../audit/score'
 
 // ---------------------------------------------------------------------------
 // Step 1: resolveListing

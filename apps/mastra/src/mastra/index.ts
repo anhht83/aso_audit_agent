@@ -23,10 +23,10 @@ import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { Mastra } from '@mastra/core'
 import { LocalFilesystem, Workspace } from '@mastra/core/workspace'
-import { asoAuditAgent } from '../agents/aso-audit-agent.ts'
-import { asoAuditWorkflow } from '../workflows/aso-audit-workflow.ts'
-import { chatRoute } from '../server/chat-route.ts'
-import { env } from '../env.ts'
+import { asoAuditAgent } from '../agents/aso-audit-agent'
+import { asoAuditWorkflow } from '../workflows/aso-audit-workflow'
+import { chatRoute } from '../server/chat-route'
+import { env } from '../env'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)

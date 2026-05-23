@@ -259,15 +259,17 @@ export type ChatMessage = z.infer<typeof chatMessageSchema>
 
 /**
  * Any event that may appear over the streaming channel. The client decodes
- * the JSON envelope, then dispatches based on `type`.
+ * the JSON envelope, then dispatches based on `type` and (for messages) `kind`.
+ *
+ * Note: this is a plain `z.union`, NOT a `z.discriminatedUnion('type', ...)`.
+ * All four message variants share `type: 'message'` and only differ on `kind`,
+ * so a single-key `type` discriminator collapses them onto one bucket and
+ * Zod 4 rejects it with "Duplicate discriminator value 'message'". The
+ * structure is still effectively a two-level tagged union (`type`, then
+ * `kind`), and `chatMessageSchema` below already discriminates on `kind` for
+ * the message branch.
  */
-export const streamEventSchema = z.discriminatedUnion('type', [
-  progressEventSchema,
-  confirmationMessageSchema,
-  textMessageSchema,
-  auditReportMessageSchema,
-  errorMessageSchema,
-])
+export const streamEventSchema = z.union([progressEventSchema, chatMessageSchema])
 
 export type StreamEvent = z.infer<typeof streamEventSchema>
 
