@@ -17,7 +17,7 @@
 
 ## 3. Mastra service (`apps/mastra`) - bootstrap
 
-- [x] 3.1 Create `apps/mastra` with `package.json`, depending on `mastra`, `@mastra/core`, `zod`, `@mendable/firecrawl-js`, OpenAI-compatible client (e.g. `@ai-sdk/openai` or whichever Mastra's current model adapter prefers), and the local `shared` workspace package
+- [x] 3.1 Create `apps/mastra` with `package.json`, depending on `mastra`, `@mastra/core`, `zod`, an OpenAI-compatible client (e.g. `@ai-sdk/openai` or whichever Mastra's current model adapter prefers), and the local `shared` workspace package. The Firecrawl integration uses the v2 HTTP API directly via `fetch` — no SDK dependency.
 - [x] 3.2 Add a `tsconfig.json` extending the root base, plus a `dev` script that runs the Mastra server on `MASTRA_PORT` with hot reload
 - [x] 3.3 Add `src/env.ts` that validates required env vars with Zod at startup and fails fast with a clear error referencing `.env.example` if any are missing (per `app-store-ingest` "Missing API key fails fast at startup")
 - [x] 3.4 Add `src/model/nim.ts` exporting a `model()` factory keyed on `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`, returning a Mastra-compatible model. Document the OpenAI swap in a comment.
@@ -38,12 +38,12 @@
 
 - [x] 6.1 Vendor `Eronred/aso-skills` `skills/aso-audit/SKILL.md` into `apps/mastra/src/skills/aso-audit/SKILL.md`. Reconcile the rubric to match the brief's exact table: Description = 10% (flat), replace upstream's "Keyword Rankings" 10% with the brief's "Competitive position" 5% and add the remaining 5% to match the brief's weights. Add a "Visibility and Renormalization" section spelling out our public-listing-only policy. Preserve attribution in frontmatter (`source`, MIT, commit SHA).
 - [x] 6.2 Verify the skill is registered/loaded by the agent at audit time (per the `aso-audit` "Skill is loaded by the audit agent" scenario) and that no rubric content is duplicated in any TypeScript file _(deferred to pass 7 - skill registration happens with the Workspace setup)_
-- [x] 6.3 Vendor `metadata-optimization` and `screenshot-optimization` SKILL.md files from `Eronred/aso-skills` into `apps/mastra/src/skills/`. Trim Appeeky-dependent steps (any reference to live keyword volume, rank data, download estimates, or Appeeky API calls); keep frameworks, rubrics, and templates. Preserve attribution in each frontmatter.
-- [x] 6.4 Wire the audit agent so it loads the matching sub-skill when emitting a recommendation that targets metadata (title, subtitle, description, promotional text) or screenshots. Other recommendation types do not load sub-skills. _(The agent's instructions explicitly tell it to load each sub-skill on demand; the Workspace exposes all three to it via `skill` / `skill_read` tools.)_
+- [x] 6.3 ~~Vendor `metadata-optimization` and `screenshot-optimization` SKILL.md files~~ **Dropped.** We initially vendored both as on-demand sub-skills, but the audit agent's main instructions already cover before/after generation for metadata and screenshot recommendations. The extra files were redundant prose; removed for less load-the-wrong-skill variance. See design D12.
+- [x] 6.4 ~~Wire the audit agent to load the matching sub-skill on demand~~ **Dropped along with 6.3.** Only `aso-audit` is loaded.
 
 ## 7. Audit agent and scoring (`apps/mastra/src/agents`)
 
-- [x] 7.1 Implement `asoAuditAgent`: scoring agent (separate from the orchestrator that owns the chat) - bound to model from `src/model/nim.ts`. Loads the `aso-audit` skill via Workspace. Sub-skill loading wiring (task 6.4) is satisfied here via the instructions telling the agent to load `metadata-optimization` and `screenshot-optimization` on demand.
+- [x] 7.1 Implement `asoAuditAgent`: scoring agent (separate from the orchestrator that owns the chat) - bound to model from `src/model/nim.ts`. Loads the `aso-audit` skill via Workspace.
 - [x] 7.2 Implement the LLM scoring call: `src/agents/aso-audit/scorer/index.ts` - `runAudit()` takes an `AppListing` plus competitor `CompetitorSummary[]` and produces an `AuditReport` via `asoAuditAgent.generate({ output: llmAuditOutputSchema })`. The driver attaches the listing and the deterministic overall score before returning.
 - [x] 7.3 Add `src/agents/aso-audit/scorer/compute-overall-score.ts` that takes the scored dimensions and returns the renormalized `overallScore` (sum over observable dimensions only, rescaled to 100).
 - [x] 7.4 Implement the Zod-validate-with-one-retry loop for `AuditReport` per the `aso-audit` spec; surface a typed error (`AuditScoringError`) after two failures.

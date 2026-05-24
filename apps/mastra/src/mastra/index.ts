@@ -26,7 +26,7 @@ import { LocalFilesystem, Workspace } from '@mastra/core/workspace'
 import { LibSQLStore } from '@mastra/libsql'
 import { asoAuditAgent } from '../agents/aso-audit/agent'
 import { asoAuditWorkflow } from '../workflows/aso-audit-workflow'
-import { chatRoute } from '../server/chat-route'
+import * as routes from '../server/routes'
 import { env } from '../env'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -37,16 +37,13 @@ const SRC_DIR = resolve(__dirname, '..')
 const PACKAGE_DIR = resolve(__dirname, '..', '..')
 
 /**
- * Workspace exposing the three vendored skills:
- *   - aso-audit (primary rubric)
- *   - metadata-optimization (loaded on demand for title/subtitle/description/promo recs)
- *   - screenshot-optimization (loaded on demand for screenshot recs)
+ * Workspace exposing the `aso-audit` skill (the primary rubric).
  *
  * Assigning the workspace at the Mastra level means every agent on this
  * service gets the `skill`, `skill_read`, and `skill_search` tools and can
- * discover all three skills automatically. We deliberately do NOT enable a
- * sandbox or expose the rest of the filesystem - the audit agent only needs
- * to read skill content, not execute commands or write files.
+ * discover the skill automatically. We deliberately do NOT enable a sandbox
+ * or expose the rest of the filesystem - the audit agent only needs to
+ * read skill content, not execute commands or write files.
  */
 const workspace = new Workspace({
   filesystem: new LocalFilesystem({ basePath: SRC_DIR }),
@@ -74,6 +71,6 @@ export const mastra = new Mastra({
   workflows: { asoAuditWorkflow },
   server: {
     port: env.MASTRA_PORT,
-    apiRoutes: [chatRoute],
+    apiRoutes: Object.values(routes),
   },
 })

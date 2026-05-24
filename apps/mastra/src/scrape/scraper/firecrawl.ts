@@ -1,21 +1,40 @@
 /**
- * Firecrawl-backed Scraper implementation.
+ * Firecrawl-backed Scraper implementation using the v2 HTTP API directly.
  *
- * Verified against @mendable/firecrawl-js@4.24.2:
- *   - default export is the `Firecrawl` class extending FirecrawlClient.
- *   - `client.scrape(url, options)` returns a `Document` whose `.json` field
- *     holds the JSON-extracted payload when `formats: [{ type: 'json', ... }]`
- *     is requested.
- *   - On HTTP errors the SDK throws `SdkError` with `.status` and `.code`.
+ * We deliberately do NOT use the official `@mendable/firecrawl-js` SDK:
+ *   - Calling the JSON endpoint with plain `fetch` removes a dependency and
+ *     keeps the request/response shape transparent (one place to inspect
+ *     everything we send and receive).
+ *   - The SDK historically bundled its own Zod 3 export, which conflicted
+ *     with our Zod 4-based extraction schemas. Going direct sidesteps that
+ *     class of compatibility bug entirely.
+ *
+ * Endpoint: POST https://api.firecrawl.dev/v2/scrape
+ * Auth:     Bearer <FIRECRAWL_API_KEY>
+ *
+ * Response model (verified against the v2 OpenAPI spec):
+ *   {
+ *     success: boolean,
+ *     data: {
+ *       json: unknown,                   // present when we request the json format
+ *       metadata: {
+ *         statusCode?: number,           // upstream page status (Firecrawl 200 + 404 here = page-not-found)
+ *         error?: string | null,
+ *         ogImage?: string,              // <meta property="og:image"> value
+ *         ...
+ *       },
+ *       warning?: string | null,
+ *     },
+ *     error?: string,
+ *     code?: string,
+ *   }
  *
  * Zod compatibility: we use Zod 4's native `z.toJSONSchema()` to convert our
- * extraction schema before handing it to Firecrawl. We previously used the
- * third-party `zod-to-json-schema` package, but it only understands Zod 3
- * instances and silently produces an empty `{}` schema when given a Zod 4
- * instance - which makes Firecrawl extract nothing and return an empty
- * Document with no `json` field.
+ * extraction schema before sending it. `unrepresentable: 'any'` keeps the
+ * conversion tolerant for any inner type that has no canonical JSON Schema
+ * form; our schemas today are pure JSON-friendly, but this future-proofs the
+ * boundary.
  */
-import Firecrawl, { SdkError } from '@mendable/firecrawl-js'
 import { z } from 'zod'
 import { err, ok, type Result } from '../types'
 import {
@@ -27,14 +46,40 @@ import {
   zodErrorToScraperError,
 } from './types'
 
+const SCRAPE_ENDPOINT = 'https://api.firecrawl.dev/v2/scrape'
+
+/** Default Firecrawl-side cache window: serve a cached page if younger than 2 days. */
+const DEFAULT_MAX_AGE_MS = 172_800_000
+
+/**
+ * Subset of the v2 /scrape response we actually consume. Firecrawl returns
+ * many more fields (markdown, html, links, branding, ...) - we only model
+ * the ones the audit pipeline reads.
+ */
+interface FirecrawlScrapeResponse {
+  success?: boolean
+  data?: {
+    json?: unknown
+    metadata?: {
+      statusCode?: number
+      error?: string | null
+      ogImage?: string
+      [key: string]: unknown
+    }
+    warning?: string | null
+  }
+  error?: string
+  code?: string
+}
+
 export class FirecrawlScraper implements Scraper {
-  private readonly client: Firecrawl
+  private readonly apiKey: string
 
   constructor(apiKey: string) {
     if (!apiKey) {
       throw new Error('FirecrawlScraper: apiKey is required.')
     }
-    this.client = new Firecrawl({ apiKey })
+    this.apiKey = apiKey
   }
 
   async extract<TSchema extends z.ZodType>(
@@ -42,68 +87,105 @@ export class FirecrawlScraper implements Scraper {
   ): Promise<Result<ScrapeSuccess<z.infer<TSchema>>, ScraperError>> {
     const { url, schema, prompt } = options
 
-    // Convert Zod 4 -> JSON Schema using Zod's native exporter.
-    // `unrepresentable: 'any'` keeps the conversion tolerant for any inner
-    // type (e.g. dates) that has no canonical JSON Schema form; our
-    // extraction schema today is pure JSON-friendly, but this keeps the call
-    // future-proof and consistent with the rest of the service.
     const jsonSchema = z.toJSONSchema(schema, {
       target: 'draft-7',
       unrepresentable: 'any',
     }) as Record<string, unknown>
 
-    let doc
+    const body = {
+      url,
+      formats: [
+        {
+          type: 'json' as const,
+          schema: jsonSchema,
+          ...(prompt ? { prompt } : {}),
+        },
+      ],
+      onlyMainContent: true,
+      maxAge: DEFAULT_MAX_AGE_MS,
+    }
+
+    let response: Response
     try {
-      doc = await this.client.scrape(url, {
-        formats: [
-          {
-            type: 'json',
-            schema: jsonSchema,
-            ...(prompt ? { prompt } : {}),
-          },
-        ],
-        onlyMainContent: false,
+      response = await fetch(SCRAPE_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
       })
     } catch (e) {
-      if (e instanceof SdkError) {
-        if (e.status === 404) {
-          return err({
-            kind: 'not_found',
-            message:
-              'The App Store listing could not be found (404). The app may be delisted or unavailable in the requested country.',
-            cause: e,
-          })
-        }
-        if (e.status === 429) {
-          return err({
-            kind: 'rate_limited',
-            message: 'Firecrawl rate limit reached. Wait a moment and try again.',
-            cause: e,
-          })
-        }
-        return err({
-          kind: 'fetch_failed',
-          message:
-            e.message ||
-            `Firecrawl returned HTTP ${e.status ?? '???'} while scraping the App Store listing.`,
-          cause: e,
-        })
-      }
       return err({
         kind: 'fetch_failed',
-        message: 'Could not reach Firecrawl. Check your network connection and FIRECRAWL_API_KEY.',
+        message:
+          'Could not reach Firecrawl. Check your network connection and FIRECRAWL_API_KEY.',
         cause: e,
       })
     }
 
-    const raw = doc?.json
-    if (raw == null) {
-      // Surface whatever clue Firecrawl gave us. `doc.warning` is the
-      // SDK-level diagnostic field; `doc.metadata.error` is the
+    let payload: FirecrawlScrapeResponse | null = null
+    try {
+      payload = (await response.json()) as FirecrawlScrapeResponse
+    } catch (e) {
+      // Non-JSON response (rare) - surface what we know via the HTTP status.
+      return err({
+        kind: 'fetch_failed',
+        message: `Firecrawl returned a non-JSON response (HTTP ${response.status}).`,
+        cause: e,
+      })
+    }
+
+    if (!response.ok) {
+      // Map documented v2 error codes to our typed shapes. 404 isn't a
+      // documented top-level Firecrawl status, but if the SDK ever started
+      // surfacing one we'd want to translate it consistently.
+      if (response.status === 429) {
+        return err({
+          kind: 'rate_limited',
+          message:
+            payload?.error ?? 'Firecrawl rate limit reached. Wait a moment and try again.',
+          cause: payload,
+        })
+      }
+      if (response.status === 404) {
+        return err({
+          kind: 'not_found',
+          message:
+            payload?.error ??
+            'The App Store listing could not be found (404). The app may be delisted or unavailable in the requested country.',
+          cause: payload,
+        })
+      }
+      return err({
+        kind: 'fetch_failed',
+        message:
+          payload?.error ??
+          `Firecrawl returned HTTP ${response.status} while scraping the App Store listing.`,
+        cause: payload,
+      })
+    }
+
+    // HTTP 200 OK from Firecrawl can still wrap an upstream-page failure:
+    // the scrape succeeded but the page Firecrawl visited returned an error.
+    const upstreamStatus = payload?.data?.metadata?.statusCode
+    if (typeof upstreamStatus === 'number' && upstreamStatus === 404) {
+      return err({
+        kind: 'not_found',
+        message:
+          'The App Store listing could not be found (404). The app may be delisted or unavailable in the requested country.',
+        cause: payload,
+      })
+    }
+
+    const rawJson = payload?.data?.json
+    if (rawJson == null) {
+      // Surface whatever clue Firecrawl gave us. `data.warning` is the
+      // SDK-level diagnostic field; `data.metadata.error` is the
       // page-level error (e.g. extractor failure). If both are empty,
-      // the most common cause is an empty JSON schema being sent - hence
-      // the diagnostic suffix.
-      const warning = doc?.warning ?? doc?.metadata?.error
+      // the most common cause is an empty JSON schema being sent -
+      // hence the diagnostic suffix.
+      const warning = payload?.data?.warning ?? payload?.data?.metadata?.error
       return err({
         kind: 'parse_failed',
         message: warning
@@ -112,17 +194,20 @@ export class FirecrawlScraper implements Scraper {
       })
     }
 
-    const parsed = schema.safeParse(raw)
+    const parsed = schema.safeParse(rawJson)
     if (!parsed.success) {
       return err(zodErrorToScraperError(parsed.error))
     }
-    // Firecrawl returns its own ogImage field on the document metadata,
-    // pulled from `<meta property="og:image">` in the page head. For App
-    // Store listings this is the canonical 1024x1024 icon; the markup the
-    // LLM sees usually contains only the lazy-load placeholder gif.
-    const ogImageRaw = (doc?.metadata as { ogImage?: unknown } | undefined)?.ogImage
+
+    // Firecrawl exposes the page's <meta property="og:image"> on the
+    // response metadata. For App Store listings this is the canonical
+    // 1024x1024 icon; the rendered markup the LLM sees usually contains
+    // only the lazy-load placeholder gif, so we prefer this value
+    // downstream in fetch-listing.ts.
+    const ogImageRaw = payload?.data?.metadata?.ogImage
     const pageMetadata: PageMetadata = {
-      ogImage: typeof ogImageRaw === 'string' && ogImageRaw.length > 0 ? ogImageRaw : null,
+      ogImage:
+        typeof ogImageRaw === 'string' && ogImageRaw.length > 0 ? ogImageRaw : null,
     }
     return ok({ data: parsed.data, pageMetadata })
   }

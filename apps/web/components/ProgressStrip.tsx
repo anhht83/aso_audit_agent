@@ -28,7 +28,7 @@ export function ProgressStrip({ steps, progress, done }: Props) {
           return (
             <li key={step} className="flex items-center gap-2 text-sm">
               <StatusDot status={status} />
-              <span className={status === 'completed' ? 'text-textDim line-through' : 'text-text'}>
+              <span className={status === 'completed' ? 'text-textDim' : 'text-text'}>
                 {STEP_LABELS[step]}
               </span>
               {status === 'failed' && (
@@ -45,14 +45,14 @@ export function ProgressStrip({ steps, progress, done }: Props) {
 function StatusDot({ status }: { status?: ProgressStatus }) {
   if (status === 'completed') {
     return (
-      <span aria-label="completed" className="grid h-4 w-4 place-items-center rounded-full bg-success/20 text-success">
+      <span aria-label="completed" className="grid h-4 w-4 place-items-center leading-none rounded-full bg-success/20 text-success">
         ✓
       </span>
     )
   }
   if (status === 'failed') {
     return (
-      <span aria-label="failed" className="grid h-4 w-4 place-items-center rounded-full bg-danger/20 text-danger">
+      <span aria-label="failed" className="grid h-4 w-4 place-items-center leading-none rounded-full bg-danger/20 text-danger">
         ×
       </span>
     )

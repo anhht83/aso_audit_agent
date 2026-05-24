@@ -35,12 +35,15 @@ export type FetchListingResult =
  *
  * Reliability notes (Apple App Store markup, 2026-05):
  *   - The app icon and screenshots are lazy-loaded; the rendered markup
- *     contains only `/assets/artwork/1x1.gif` placeholders. We recover the
- *     canonical icon via the `og:image` head metadata in `fetchListing`
- *     below, so `iconUrl` here is nullable. `screenshotUrls` will almost
- *     always be empty after we strip the placeholder URLs, so the audit
- *     relies on the dedicated `screenshotCount` field for the Screenshots
- *     dimension.
+ *     contains only `/assets/artwork/1x1.gif` placeholders. We KEEP those
+ *     placeholder URLs in `screenshotUrls` because their presence is
+ *     accurate evidence that a screenshot slot exists at that position -
+ *     downstream code uses `screenshotUrls.length` (or the dedicated
+ *     `screenshotCount` field) for the Screenshots dimension. For the
+ *     icon we still resolve the canonical artwork URL via the `og:image`
+ *     head metadata in `fetchListing` below, because consumers (the
+ *     report renderer) need a real loadable URL there - a transparent
+ *     1x1 gif would render as a blank icon.
  *   - "Free" appears prominently as the price label (NOT promotional text).
  *     `promotionalText` is the optional 170-char banner some apps surface
  *     above the description; if you don't see a distinct paragraph above
@@ -57,19 +60,19 @@ const extractionSchema = z
       .string()
       .nullable()
       .describe(
-        'Direct URL to the app icon image. Most listings only render a `/assets/artwork/1x1.gif` placeholder for the icon; if all you can see is a placeholder GIF, return null and let the service fall back to the og:image metadata.',
+        'Direct URL to the app icon image as it appears in the page markup. Apple lazy-loads the icon, so this is usually `/assets/artwork/1x1.gif`; capture that URL as-is. The service resolves the real artwork URL from `og:image` server-side. Return null only if no icon `<img>` is present at all.',
       ),
     screenshotUrls: z
       .array(z.string())
       .describe(
-        'All screenshot image URLs in display order. Exclude any `apps.apple.com/assets/artwork/1x1.gif` placeholders — they are lazy-load skeletons, not real screenshots. Return an empty array if only placeholders are present.',
+        'Screenshot image URLs in display order. In Firecrawl markdown, the screenshot region starts after the top metadata Size link: `- [Size...MB](...)`, then a blank-line gap (`\\n\\n\\n`), then a contiguous run of standalone image bullets such as `- ![](https://apps.apple.com/assets/artwork/1x1.gif)`. Count ONLY those bullets after the Size link + blank gap. Apple lazy-loads screenshots, so these URLs are usually `/assets/artwork/1x1.gif` placeholders — INCLUDE every placeholder URL as-is; each bullet marks one real screenshot slot. Stop when the standalone image-bullet run ends.',
       ),
     screenshotCount: z
       .number()
       .int()
       .nullable()
       .describe(
-        'Total number of screenshot slots on the listing, INCLUDING the lazy-load placeholders. Count the screenshot image bullets visible on the page (typical: 0-10). Return null only if no screenshot region is present at all.',
+        'Number of screenshot slots on the listing — equal to `screenshotUrls.length`. Return null only if no screenshot region exists at all.',
       ),
     previewVideoUrl: z
       .string()
@@ -81,7 +84,9 @@ const extractionSchema = z
     subtitle: z
       .string()
       .nullable()
-      .describe('Subtitle text below the app name, or null if not present.'),
+      .describe(
+        'The short tagline that sits in this exact Firecrawl markdown layout at the top of the listing: `# <app name>\\n\\n<SUBTITLE>\\n\\n<price label>`, where the price label is "Free", "$0.99", "Offers In-App Purchases", or similar. If the markdown goes directly from the app name to the price label (`# <app name>\\n\\n<price label>`) with nothing between them, the listing has no subtitle - return null. Do NOT use the category, developer name, or any line that comes after the price label.',
+      ),
     currentVersion: z
       .string()
       .nullable()
@@ -156,12 +161,14 @@ const extractionSchema = z
 
 /**
  * Apple renders lazy-loaded image bullets as a 1x1 transparent GIF until
- * the user scrolls. Strip those so the downstream pipeline never confuses
- * a placeholder for an actual screenshot.
+ * the user scrolls. We KEEP these URLs in `screenshotUrls` because their
+ * presence is evidence that a slot exists. They are only filtered out for
+ * the rendered `iconUrl`, which needs a real loadable URL (a 1x1 gif
+ * would render as a blank icon in the audit report).
  */
 const PLACEHOLDER_IMAGE_PATTERN = /\/assets\/artwork\/1x1\.gif$/i
 
-function isRealAssetUrl(u: string): boolean {
+function isLoadableImageUrl(u: string): boolean {
   if (!u) return false
   if (PLACEHOLDER_IMAGE_PATTERN.test(u)) return false
   return true
@@ -189,20 +196,22 @@ export async function fetchListing(url: string): Promise<FetchListingResult> {
   const { data, pageMetadata } = scrape.value
   // Apple lazy-loads the icon from a 1x1 placeholder gif, so the LLM-
   // extracted iconUrl is almost always the placeholder
-  // (https://apps.apple.com/assets/artwork/1x1.gif). Prefer the
-  // server-rendered og:image, which Apple populates with the canonical
-  // 1024x1024 artwork URL. Fall back to whatever the extraction returned
-  // only if og:image is missing and the LLM happened to find a real URL.
+  // (https://apps.apple.com/assets/artwork/1x1.gif). The rendered iconUrl
+  // is consumed by the audit report UI, which needs a real loadable URL -
+  // we therefore prefer the server-rendered og:image (Apple populates it
+  // with the canonical 1024x1024 artwork) and fall back to the LLM's URL
+  // only if og:image is missing AND the LLM happened to find a real one.
   const ogImageUrl =
-    pageMetadata.ogImage && isRealAssetUrl(pageMetadata.ogImage) ? pageMetadata.ogImage : null
+    pageMetadata.ogImage && isLoadableImageUrl(pageMetadata.ogImage) ? pageMetadata.ogImage : null
   const extractedIconUrl =
-    data.iconUrl && isRealAssetUrl(data.iconUrl) ? data.iconUrl : null
+    data.iconUrl && isLoadableImageUrl(data.iconUrl) ? data.iconUrl : null
   const iconUrl = ogImageUrl ?? extractedIconUrl
 
-  // Drop placeholder GIFs from the screenshot list so the audit sees the
-  // ground truth (almost always: empty array, with `screenshotCount`
-  // carrying the slot count).
-  const screenshotUrls = (data.screenshotUrls ?? []).filter(isRealAssetUrl)
+  // Keep placeholder GIFs in the screenshot list - each one is evidence
+  // that a screenshot slot exists on the listing, which is exactly what
+  // the Screenshots dimension scores. The audit can use
+  // `screenshotUrls.length` (or the dedicated `screenshotCount` field).
+  const screenshotUrls = data.screenshotUrls ?? []
 
   // If iconUrl is still missing here we can't satisfy appListingSchema
   // (it requires a URL). Fail explicitly with a useful message rather than

@@ -20,14 +20,6 @@ The skill SHALL be the single source of truth for audit instructions. The agent'
 - **THEN** its frontmatter includes a `source` field pointing to the upstream file and references the MIT license
 - **AND** the project README credits `Eronred/aso-skills` as the rubric source
 
-#### Scenario: Sub-skill loads for metadata recommendations
-- **WHEN** the audit agent is generating a recommendation that requires before/after text for the title, subtitle, description, or promotional text
-- **THEN** the agent loads the vendored `metadata-optimization` skill in addition to `aso-audit`
-
-#### Scenario: Sub-skill loads for screenshot recommendations
-- **WHEN** the audit agent is generating a recommendation about screenshots
-- **THEN** the agent loads the vendored `screenshot-optimization` skill in addition to `aso-audit`
-
 ### Requirement: Score ten dimensions on a 0-10 scale with declared visibility
 
 The system SHALL score the listing on each of these ten dimensions: Title, Subtitle, Keyword field, Description, Screenshots, App preview video, Ratings & reviews, Icon, Conversion signals, Competitive position.

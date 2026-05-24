@@ -98,8 +98,6 @@ Each recommendation MUST include:
 
 For recommendations that target non-observable dimensions (the keyword field), frame the recommendation as **methodology** rather than a literal edit: describe how to do keyword research and where to apply the result, rather than producing a fake before/after.
 
-When emitting a metadata recommendation (title, subtitle, description, promotional text), if a `metadata-optimization` skill is available, load it for the canonical platform-specific limits and copy framework. When emitting a screenshot recommendation, if a `screenshot-optimization` skill is available, load it for the slot-by-slot framework.
-
 ## Competitor comparison
 
 You will receive a `CompetitorSummary[]` (up to three apps). Emit a `competitorComparison` object with:

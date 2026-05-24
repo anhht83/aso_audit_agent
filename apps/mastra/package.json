@@ -12,7 +12,6 @@
     "@aso/shared": "*",
     "@mastra/core": "1.36.0",
     "@mastra/libsql": "^1.11.1",
-    "@mendable/firecrawl-js": "4.24.2",
     "mastra": "1.10.0",
     "zod": "^4.4.3"
   },

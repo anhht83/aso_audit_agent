@@ -11,7 +11,7 @@
  * framing code and works directly with WHATWG Streams primitives on both
  * sides.
  */
-import type { StreamEvent } from '@aso/shared'
+import { streamEventSchema, type StreamEvent } from '@aso/shared'
 
 const encoder = new TextEncoder()
 
@@ -54,6 +54,45 @@ export function createEventStream(): {
   }
 
   return { stream, writer }
+}
+
+/**
+ * Mastra workflow streams emit `WorkflowStreamEvent` chunks (`workflow-start`,
+ * `workflow-step-output`, `workflow-finish`, ...). Our step-writer payloads
+ * ride inside `workflow-step-output` chunks at `payload.output`. This unwraps
+ * one chunk back into the `StreamEvent` shape the chat UI expects.
+ *
+ * Returns `null` for chunks that don't carry one of our event payloads (e.g.
+ * lifecycle chunks like `workflow-start`), so callers can filter them out.
+ */
+export function unwrapStepOutput(chunk: unknown): StreamEvent | null {
+  if (!chunk || typeof chunk !== 'object') return null
+  const c = chunk as { type?: unknown; payload?: unknown }
+  if (c.type !== 'workflow-step-output') return null
+  if (!c.payload || typeof c.payload !== 'object') return null
+  const p = c.payload as { output?: unknown }
+  const parsed = streamEventSchema.safeParse(p.output)
+  return parsed.success ? parsed.data : null
+}
+
+/**
+ * Drain a Mastra workflow chunk iterable into an `EventWriter`. Each chunk is
+ * passed through `unwrapStepOutput`; recognised `StreamEvent` payloads are
+ * forwarded to the writer, and lifecycle chunks (`workflow-start`,
+ * `workflow-finish`, `workflow-step-start`, ...) are silently dropped.
+ *
+ * Returns when the chunk iterable is exhausted. Does NOT close the writer -
+ * the caller decides when to close it (typically after `output.result` has
+ * resolved and any final terminal events have been emitted).
+ */
+export async function forwardWorkflowChunks(
+  chunks: AsyncIterable<unknown>,
+  writer: EventWriter,
+): Promise<void> {
+  for await (const chunk of chunks) {
+    const event = unwrapStepOutput(chunk)
+    if (event) await writer.write(event)
+  }
 }
 
 export const STREAM_HEADERS: HeadersInit = {

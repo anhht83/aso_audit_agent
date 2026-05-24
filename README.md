@@ -24,7 +24,7 @@ That starts both services in one terminal:
 
 Open `http://localhost:3000` and paste an App Store URL, e.g. `https://apps.apple.com/us/app/spotify-music-and-podcasts/id324684580`.
 
-Node 20.9+ is required.
+Node 22.22.0+ is required.
 
 ## How it flows
 
@@ -38,7 +38,7 @@ Node 20.9+ is required.
 
 | Primitive | What it owns |
 |---|---|
-| **Skills** | `aso-audit` (primary rubric, ten dimensions and weights, output schema, visibility policy), `metadata-optimization` and `screenshot-optimization` (loaded on demand for before/after generation of those recommendation types). All three vendored from [`Eronred/aso-skills`](https://github.com/Eronred/aso-skills) — see Decisions below. |
+| **Skills** | `aso-audit` — the primary rubric (ten dimensions and weights, output schema, visibility policy). Vendored from [`Eronred/aso-skills`](https://github.com/Eronred/aso-skills) — see Decisions below. |
 | **Workflow** | `asoAuditWorkflow` — two steps with a human-in-the-loop suspend between them. `resolveListing` scrapes and suspends with the listing; `runAudit` resumes with `{ confirmed }`, runs competitor fetch + scoring, returns the final `AuditReport`. Emits `progress` events through the workflow `writer`. |
 | **Agent** | `asoAuditAgent` — the scoring agent. Receives the resolved listing + competitor summaries, loads the `aso-audit` skill, emits a structured `LlmAuditOutput` (validated by Zod with one retry on failure). |
 | **Server route** | `POST /chat` — accepts `{ kind: 'start', text }` or `{ kind: 'resume', resumeToken, confirmed }`, streams `StreamEvent`s as newline-delimited JSON (`application/x-ndjson`) over a Web Stream. |
@@ -83,13 +83,11 @@ The LLM scores each dimension; the service computes `overallScore` from those sc
 
 ### Audit skill source: adapted from `Eronred/aso-skills` (MIT)
 
-The brief notes its rubric was "adapted from the open-source [aso-skills](https://github.com/Eronred/aso-skills) project." Rather than paraphrasing the same rubric a second time and pretending I wrote it from scratch, I vendor three of its `SKILL.md` files into `apps/mastra/src/skills/` with attribution preserved in each file's frontmatter:
+The brief notes its rubric was "adapted from the open-source [aso-skills](https://github.com/Eronred/aso-skills) project." Rather than paraphrasing the same rubric a second time and pretending I wrote it from scratch, I vendor a single `SKILL.md` file into `apps/mastra/src/skills/aso-audit/` with attribution preserved in the file's frontmatter:
 
 - `aso-audit` — primary rubric, **reconciled** to match the brief's exact table (Description flat 10%, "Competitive position" 5% replacing upstream's "Keyword Rankings" 10%, iOS-only). I added a "Visibility and Renormalization" section spelling out our public-listing-only policy.
-- `metadata-optimization` — loaded by the audit agent when emitting a recommendation that requires before/after text for the title, subtitle, description, or promotional text. Upstream's Appeeky-dependent steps (live keyword volume lookups, "Check for app-marketing-context.md" router flow) are trimmed. Android-specific sections are dropped.
-- `screenshot-optimization` — loaded for screenshot-related recommendations. Similarly trimmed.
 
-I deliberately **do not** vendor the other 25+ skills in the upstream repo. Most of them assume the paid Appeeky MCP is connected for live keyword and rank data; without that, they'd either fabricate data (dishonest) or shrink to stubs (worse than not having them).
+I deliberately **do not** vendor the other 25+ skills in the upstream repo (including `metadata-optimization` and `screenshot-optimization`). Most of them assume the paid Appeeky MCP is connected for live keyword and rank data; without that, they'd either fabricate data (dishonest) or shrink to stubs (worse than not having them). The audit agent's instructions already cover before/after generation for metadata and screenshot recommendations directly — a separate skill file for each was redundant.
 
 I also deliberately **do not** integrate Appeeky itself. It's a paid product; the brief explicitly suggests free-tier options and requires `npm install && npm run dev works`. Our Firecrawl + iTunes Search path covers what we can honestly observe.
 
@@ -117,9 +115,7 @@ I also deliberately **do not** integrate Appeeky itself. It's a paid product; th
 │   │       │           └── normalize-dimensions.ts
 │   │       ├── workflows/aso-audit-workflow.ts
 │   │       ├── skills/
-│   │       │   ├── aso-audit/SKILL.md
-│   │       │   ├── metadata-optimization/SKILL.md
-│   │       │   └── screenshot-optimization/SKILL.md
+│   │       │   └── aso-audit/SKILL.md
 │   │       ├── scrape/
 │   │       │   ├── scraper/             # Scraper subsystem
 │   │       │   │   ├── index.ts         # singleton chosen impl
@@ -131,8 +127,13 @@ I also deliberately **do not** integrate Appeeky itself. It's a paid product; th
 │   │       │   ├── app-store-url.ts     # URL validation
 │   │       │   └── itunes-search.ts     # Apple iTunes Search API client
 │   │       ├── server/
-│   │       │   ├── chat-route.ts        # POST /chat (NDJSON over Web Stream)
-│   │       │   └── event-stream.ts
+│   │       │   ├── routes.ts            # All HTTP route registrations
+│   │       │   ├── handlers/
+│   │       │   │   └── chat.handler.ts  # POST /chat orchestration (NDJSON over Web Stream)
+│   │       │   └── libs/
+│   │       │       ├── event-stream.ts  # NDJSON sink + workflow chunk forwarder
+│   │       │       ├── extract-url.ts   # lenient chat-text → App Store URL
+│   │       │       └── emit-chat-event.ts  # WorkflowResult → chat-dialect StreamEvent
 │   │       ├── model/nim.ts             # LLM factory
 │   │       └── env.ts                   # Zod-validated env, fails fast
 │   └── web/                             # Next.js App Router UI
